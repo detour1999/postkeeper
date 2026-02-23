@@ -35,8 +35,9 @@ export async function poll() {
       console.log(`\nChecking @${username}...`);
 
       try {
-        const postNodes = await fetchProfilePosts(page, username);
-        console.log(`  Found ${postNodes.length} recent post(s)`);
+        const lastSeen = state[username] || null;
+        const postNodes = await fetchProfilePosts(page, username, lastSeen);
+        console.log(`  Found ${postNodes.length} post(s)`);
 
         // Filter to new posts and sort oldest-first so we process in order
         const newPosts = postNodes
@@ -70,11 +71,17 @@ export async function poll() {
           saveState(statePath, state);
 
           console.log(`  Saved: ${paths.jsonPath}`);
+
+          // Small delay between post detail fetches
+          await new Promise((r) => setTimeout(r, 1000 + Math.random() * 2000));
         }
       } catch (err) {
         console.error(`  Error polling @${username}: ${err.message}`);
         continue;
       }
+
+      // Delay between profiles
+      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
     }
   } finally {
     await context.close();

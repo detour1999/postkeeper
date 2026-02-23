@@ -70,17 +70,20 @@ export function parsePost(node) {
 
 /**
  * Fetch the post list from a profile page by intercepting GraphQL responses.
+ * Scrolls to load more posts until we find one older than lastSeenTimestamp,
+ * or until there are no more pages.
  * Returns an array of raw post nodes from the timeline.
  */
-export async function fetchProfilePosts(page, username) {
+export async function fetchProfilePosts(page, username, lastSeenTimestamp = null) {
   const posts = [];
+  let hasNextPage = true;
+  let batchReceived = false;
 
   const handler = async (response) => {
     const url = response.url();
     if (url.includes("/graphql/query") || url.includes("/api/graphql")) {
       try {
         const json = await response.json();
-        // Find the user timeline key (xdt_api__v1__feed__user_timeline_graphql_connection)
         const dataKeys = Object.keys(json?.data || {});
         const timelineKey = dataKeys.find((k) => k.includes("user_timeline"));
         if (timelineKey) {
@@ -89,6 +92,8 @@ export async function fetchProfilePosts(page, username) {
           for (const edge of edges) {
             posts.push(edge.node);
           }
+          hasNextPage = timeline?.page_info?.has_next_page ?? false;
+          batchReceived = true;
         }
       } catch {
         // Not the response we're looking for
@@ -103,8 +108,41 @@ export async function fetchProfilePosts(page, username) {
       waitUntil: "domcontentloaded",
     });
 
-    // Give time for GraphQL responses to arrive after page load
+    // Wait for initial batch
     await page.waitForTimeout(5000);
+
+    // Keep scrolling until we've gone past lastSeenTimestamp or run out of pages
+    while (hasNextPage) {
+      // Check if the oldest post we have is already older than our last seen
+      if (lastSeenTimestamp) {
+        const oldestPost = posts[posts.length - 1];
+        if (oldestPost) {
+          const oldestTs = new Date(oldestPost.taken_at * 1000).toISOString();
+          if (oldestTs <= lastSeenTimestamp) {
+            // We've scrolled past what we've seen before
+            break;
+          }
+        }
+      }
+
+      // Scroll to trigger loading more
+      batchReceived = false;
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+      // Wait for the next batch (up to 8 seconds)
+      const start = Date.now();
+      while (!batchReceived && Date.now() - start < 8000) {
+        await page.waitForTimeout(500);
+      }
+
+      if (!batchReceived) {
+        // No new batch arrived, stop
+        break;
+      }
+
+      // Small delay to be polite
+      await page.waitForTimeout(1000 + Math.random() * 1000);
+    }
   } finally {
     page.removeListener("response", handler);
   }
