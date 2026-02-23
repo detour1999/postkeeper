@@ -1,52 +1,68 @@
 // src/extractor.js
 
 /**
- * Parse an Instagram GraphQL media node into our clean post format.
+ * Extract the best image URL from an image_versions2 object.
  */
-export function parsePostFromGraphQL(node) {
-  const caption = node.edge_media_to_caption?.edges?.[0]?.node?.text || "";
-  const timestamp = new Date(node.taken_at_timestamp * 1000).toISOString();
-  const username = node.owner?.username || "";
+function bestImageUrl(imageVersions) {
+  const candidates = imageVersions?.candidates;
+  if (!candidates || candidates.length === 0) return null;
+  // First candidate is typically the highest quality
+  return candidates[0].url;
+}
+
+/**
+ * Extract the best video URL from a video_versions array.
+ */
+function bestVideoUrl(videoVersions) {
+  if (!videoVersions || videoVersions.length === 0) return null;
+  return videoVersions[0].url;
+}
+
+/**
+ * Parse a media node from Instagram's current API format into our clean post format.
+ * media_type: 1 = image, 2 = video, 8 = carousel
+ */
+export function parsePost(node) {
+  const caption = node.caption?.text || "";
+  const timestamp = new Date(node.taken_at * 1000).toISOString();
+  const username = node.user?.username || "";
+  const shortcode = node.code;
 
   let media_type;
   let media = [];
 
-  if (node.__typename === "GraphSidecar" || node.edge_sidecar_to_children) {
+  if (node.media_type === 8 && node.carousel_media) {
     media_type = "carousel";
-    const children = node.edge_sidecar_to_children?.edges || [];
-    media = children.map((edge, i) => {
-      const child = edge.node;
-      if (child.is_video) {
-        return { type: "video", url: child.video_url, file: `${i + 1}.mp4` };
+    media = node.carousel_media.map((item, i) => {
+      if (item.media_type === 2 && item.video_versions) {
+        return { type: "video", url: bestVideoUrl(item.video_versions), file: `${i + 1}.mp4` };
       }
-      return { type: "image", url: child.display_url, file: `${i + 1}.jpg` };
+      return { type: "image", url: bestImageUrl(item.image_versions2), file: `${i + 1}.jpg` };
     });
-  } else if (node.is_video) {
+  } else if (node.media_type === 2) {
     media_type = "video";
-    media = [{ type: "video", url: node.video_url, file: "1.mp4" }];
+    media = [{ type: "video", url: bestVideoUrl(node.video_versions), file: "1.mp4" }];
   } else {
     media_type = "image";
-    media = [{ type: "image", url: node.display_url, file: "1.jpg" }];
+    media = [{ type: "image", url: bestImageUrl(node.image_versions2), file: "1.jpg" }];
   }
 
-  const tagged_users = (node.edge_media_to_tagged_user?.edges || []).map(
-    (e) => e.node.user.username,
-  );
+  const tagged_users = (node.usertags?.in || []).map((t) => t.user?.username).filter(Boolean);
 
   return {
-    shortcode: node.shortcode,
-    url: `https://www.instagram.com/p/${node.shortcode}/`,
-    id: node.id,
+    shortcode,
+    url: `https://www.instagram.com/p/${shortcode}/`,
+    id: node.id || node.pk,
     username,
     timestamp,
     caption,
     location: node.location
-      ? { name: node.location.name, id: node.location.id }
+      ? { name: node.location.name, id: node.location.pk || node.location.id }
       : null,
     tagged_users,
     alt_text: node.accessibility_caption || null,
-    likes: node.edge_media_preview_like?.count || 0,
-    comments: node.edge_media_to_comment?.count || 0,
+    likes: node.like_count || 0,
+    comments: node.comment_count || 0,
     media_type,
     media,
   };
@@ -54,77 +70,99 @@ export function parsePostFromGraphQL(node) {
 
 /**
  * Fetch the post list from a profile page by intercepting GraphQL responses.
- * Returns an array of raw GraphQL media nodes.
+ * Returns an array of raw post nodes from the timeline.
  */
 export async function fetchProfilePosts(page, username) {
   const posts = [];
 
-  const responsePromise = new Promise((resolve) => {
-    page.on("response", async (response) => {
-      const url = response.url();
-      if (url.includes("/graphql/query") || url.includes("/api/graphql")) {
-        try {
-          const json = await response.json();
-          const user = json?.data?.user;
-          const media = user?.edge_owner_to_timeline_media;
-          if (media?.edges) {
-            for (const edge of media.edges) {
-              posts.push(edge.node);
-            }
-            resolve();
+  const handler = async (response) => {
+    const url = response.url();
+    if (url.includes("/graphql/query") || url.includes("/api/graphql")) {
+      try {
+        const json = await response.json();
+        // Find the user timeline key (xdt_api__v1__feed__user_timeline_graphql_connection)
+        const dataKeys = Object.keys(json?.data || {});
+        const timelineKey = dataKeys.find((k) => k.includes("user_timeline"));
+        if (timelineKey) {
+          const timeline = json.data[timelineKey];
+          const edges = timeline?.edges || [];
+          for (const edge of edges) {
+            posts.push(edge.node);
           }
-        } catch {
-          // Not the response we're looking for
         }
+      } catch {
+        // Not the response we're looking for
       }
+    }
+  };
+
+  page.on("response", handler);
+
+  try {
+    await page.goto(`https://www.instagram.com/${username}/`, {
+      waitUntil: "domcontentloaded",
     });
-  });
 
-  await page.goto(`https://www.instagram.com/${username}/`, {
-    waitUntil: "networkidle",
-  });
-
-  await Promise.race([
-    responsePromise,
-    new Promise((r) => setTimeout(r, 15000)),
-  ]);
+    // Give time for GraphQL responses to arrive after page load
+    await page.waitForTimeout(5000);
+  } finally {
+    page.removeListener("response", handler);
+  }
 
   return posts;
 }
 
 /**
  * Fetch full post details (including all carousel items) by navigating to the post permalink.
- * Returns the full GraphQL media node.
+ * Returns the full post node, or null if not intercepted.
  */
 export async function fetchPostDetails(page, shortcode) {
   let postNode = null;
 
-  const responsePromise = new Promise((resolve) => {
-    page.on("response", async (response) => {
-      const url = response.url();
-      if (url.includes("/graphql/query") || url.includes("/api/graphql")) {
-        try {
-          const json = await response.json();
-          const media = json?.data?.shortcode_media;
-          if (media && media.shortcode === shortcode) {
-            postNode = media;
-            resolve();
+  const handler = async (response) => {
+    const url = response.url();
+    if (url.includes("/graphql/query") || url.includes("/api/graphql")) {
+      try {
+        const json = await response.json();
+        const str = JSON.stringify(json);
+        // Look for a response containing this shortcode with carousel_media
+        if (str.includes(shortcode)) {
+          // Check various possible locations for the media data
+          const dataKeys = Object.keys(json?.data || {});
+          for (const key of dataKeys) {
+            const val = json.data[key];
+            // Could be xdt_shortcode_media or similar
+            if (val?.code === shortcode || val?.shortcode === shortcode) {
+              postNode = val;
+              return;
+            }
+            // Could be nested in items/edges
+            const items = val?.items || val?.edges?.map((e) => e.node) || [];
+            for (const item of items) {
+              if (item?.code === shortcode) {
+                postNode = item;
+                return;
+              }
+            }
           }
-        } catch {
-          // Not the response we're looking for
         }
+      } catch {
+        // Not the response we're looking for
       }
+    }
+  };
+
+  page.on("response", handler);
+
+  try {
+    await page.goto(`https://www.instagram.com/p/${shortcode}/`, {
+      waitUntil: "domcontentloaded",
     });
-  });
 
-  await page.goto(`https://www.instagram.com/p/${shortcode}/`, {
-    waitUntil: "networkidle",
-  });
-
-  await Promise.race([
-    responsePromise,
-    new Promise((r) => setTimeout(r, 15000)),
-  ]);
+    await page.waitForTimeout(5000);
+  } finally {
+    page.removeListener("response", handler);
+  }
 
   return postNode;
 }

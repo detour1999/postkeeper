@@ -1,27 +1,31 @@
 // tests/extractor.test.js
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parsePostFromGraphQL } from "../src/extractor.js";
+import { parsePost } from "../src/extractor.js";
 
-describe("parsePostFromGraphQL", () => {
+describe("parsePost", () => {
   test("parses a single image post", () => {
-    const graphqlNode = {
+    const node = {
       id: "12345",
-      shortcode: "ABC123",
-      taken_at_timestamp: 1740000000,
-      edge_media_to_caption: { edges: [{ node: { text: "Hello world" } }] },
-      display_url: "https://example.com/img.jpg",
-      is_video: false,
-      __typename: "GraphImage",
-      location: { name: "Portland", id: "99" },
-      edge_media_to_tagged_user: { edges: [{ node: { user: { username: "friend1" } } }] },
+      pk: "12345",
+      code: "ABC123",
+      taken_at: 1740000000,
+      caption: { text: "Hello world" },
+      media_type: 1,
+      image_versions2: {
+        candidates: [{ url: "https://example.com/img.jpg", width: 1080, height: 1080 }],
+      },
+      video_versions: null,
+      location: { name: "Portland", pk: "99" },
+      usertags: { in: [{ user: { username: "friend1" } }] },
       accessibility_caption: "A photo of a sunset",
-      edge_media_preview_like: { count: 10 },
-      edge_media_to_comment: { count: 3 },
-      owner: { username: "testuser" },
+      like_count: 10,
+      comment_count: 3,
+      user: { username: "testuser", pk: "111" },
+      carousel_media: null,
     };
 
-    const post = parsePostFromGraphQL(graphqlNode);
+    const post = parsePost(node);
 
     assert.strictEqual(post.shortcode, "ABC123");
     assert.strictEqual(post.url, "https://www.instagram.com/p/ABC123/");
@@ -30,70 +34,102 @@ describe("parsePostFromGraphQL", () => {
     assert.strictEqual(post.media_type, "image");
     assert.strictEqual(post.media.length, 1);
     assert.strictEqual(post.media[0].type, "image");
+    assert.strictEqual(post.media[0].url, "https://example.com/img.jpg");
     assert.strictEqual(post.location.name, "Portland");
     assert.deepStrictEqual(post.tagged_users, ["friend1"]);
     assert.strictEqual(post.alt_text, "A photo of a sunset");
     assert.strictEqual(post.likes, 10);
     assert.strictEqual(post.comments, 3);
+    assert.strictEqual(post.username, "testuser");
   });
 
-  test("parses a carousel post with sidecar children", () => {
-    const graphqlNode = {
+  test("parses a carousel post", () => {
+    const node = {
       id: "67890",
-      shortcode: "XYZ789",
-      taken_at_timestamp: 1740000000,
-      edge_media_to_caption: { edges: [{ node: { text: "Carousel!" } }] },
-      display_url: "https://example.com/img1.jpg",
-      __typename: "GraphSidecar",
-      is_video: false,
+      code: "XYZ789",
+      taken_at: 1740000000,
+      caption: { text: "Carousel!" },
+      media_type: 8,
+      image_versions2: { candidates: [{ url: "https://example.com/cover.jpg" }] },
+      video_versions: null,
       location: null,
-      edge_media_to_tagged_user: { edges: [] },
+      usertags: null,
       accessibility_caption: null,
-      edge_media_preview_like: { count: 5 },
-      edge_media_to_comment: { count: 1 },
-      owner: { username: "testuser" },
-      edge_sidecar_to_children: {
-        edges: [
-          { node: { display_url: "https://example.com/img1.jpg", is_video: false } },
-          { node: { display_url: "https://example.com/img2.jpg", is_video: false } },
-          { node: { video_url: "https://example.com/vid.mp4", display_url: "https://example.com/thumb.jpg", is_video: true } },
-        ],
-      },
+      like_count: 5,
+      comment_count: 1,
+      user: { username: "testuser" },
+      carousel_media_count: 3,
+      carousel_media: [
+        {
+          media_type: 1,
+          image_versions2: { candidates: [{ url: "https://example.com/img1.jpg" }] },
+          video_versions: null,
+        },
+        {
+          media_type: 1,
+          image_versions2: { candidates: [{ url: "https://example.com/img2.jpg" }] },
+          video_versions: null,
+        },
+        {
+          media_type: 2,
+          image_versions2: { candidates: [{ url: "https://example.com/thumb.jpg" }] },
+          video_versions: [{ url: "https://example.com/vid.mp4" }],
+        },
+      ],
     };
 
-    const post = parsePostFromGraphQL(graphqlNode);
+    const post = parsePost(node);
 
     assert.strictEqual(post.media_type, "carousel");
     assert.strictEqual(post.media.length, 3);
     assert.strictEqual(post.media[0].type, "image");
+    assert.strictEqual(post.media[0].url, "https://example.com/img1.jpg");
     assert.strictEqual(post.media[1].type, "image");
     assert.strictEqual(post.media[2].type, "video");
     assert.strictEqual(post.media[2].url, "https://example.com/vid.mp4");
   });
 
   test("parses a video post", () => {
-    const graphqlNode = {
+    const node = {
       id: "11111",
-      shortcode: "VID111",
-      taken_at_timestamp: 1740000000,
-      edge_media_to_caption: { edges: [] },
-      display_url: "https://example.com/thumb.jpg",
-      video_url: "https://example.com/video.mp4",
-      is_video: true,
-      __typename: "GraphVideo",
+      code: "VID111",
+      taken_at: 1740000000,
+      caption: null,
+      media_type: 2,
+      image_versions2: { candidates: [{ url: "https://example.com/thumb.jpg" }] },
+      video_versions: [{ url: "https://example.com/video.mp4" }],
       location: null,
-      edge_media_to_tagged_user: { edges: [] },
+      usertags: null,
       accessibility_caption: null,
-      edge_media_preview_like: { count: 0 },
-      edge_media_to_comment: { count: 0 },
-      owner: { username: "testuser" },
+      like_count: 0,
+      comment_count: 0,
+      user: { username: "testuser" },
+      carousel_media: null,
     };
 
-    const post = parsePostFromGraphQL(graphqlNode);
+    const post = parsePost(node);
 
     assert.strictEqual(post.media_type, "video");
     assert.strictEqual(post.media.length, 1);
     assert.strictEqual(post.media[0].type, "video");
     assert.strictEqual(post.media[0].url, "https://example.com/video.mp4");
+    assert.strictEqual(post.caption, "");
+  });
+
+  test("handles missing usertags gracefully", () => {
+    const node = {
+      id: "22222",
+      code: "TAG222",
+      taken_at: 1740000000,
+      caption: { text: "no tags" },
+      media_type: 1,
+      image_versions2: { candidates: [{ url: "https://example.com/img.jpg" }] },
+      user: { username: "testuser" },
+      usertags: null,
+      location: null,
+    };
+
+    const post = parsePost(node);
+    assert.deepStrictEqual(post.tagged_users, []);
   });
 });

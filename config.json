@@ -1,5 +1,5 @@
 {
-  "profiles": [],
+  "profiles": ["detour1999", "detour.cars", "thedomeontherock"],
   "output_dir": "./output",
   "profile_dir": "./.browser-profile"
 }
