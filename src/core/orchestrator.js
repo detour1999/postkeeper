@@ -1,5 +1,5 @@
 // src/core/orchestrator.js
-import { mkdirSync, writeFileSync, copyFileSync, existsSync, readFileSync, mkdtempSync } from "node:fs";
+import { mkdirSync, writeFileSync, renameSync, copyFileSync, unlinkSync, existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { toAS2 } from "./as2.js";
@@ -53,7 +53,12 @@ export async function runPoll(plugin, pluginConfig, archiveDir) {
       mkdirSync(mediaDir, { recursive: true });
       for (const m of media) {
         if (m.tmpPath && existsSync(m.tmpPath)) {
-          copyFileSync(m.tmpPath, join(mediaDir, m.relativePath));
+          try {
+            renameSync(m.tmpPath, join(mediaDir, m.relativePath));
+          } catch {
+            copyFileSync(m.tmpPath, join(mediaDir, m.relativePath));
+            unlinkSync(m.tmpPath);
+          }
         }
       }
     }
@@ -61,4 +66,7 @@ export async function runPoll(plugin, pluginConfig, archiveDir) {
 
   // Save updated state
   savePluginState(archiveDir, plugin.name, result.state);
+
+  // Clean up temp directory
+  rmSync(tmpDir, { recursive: true, force: true });
 }
