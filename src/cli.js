@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 // src/cli.js
 import { Command } from "commander";
-import { resolve, join } from "node:path";
+import { resolve, join, dirname } from "node:path";
 import { loadConfig } from "./config.js";
 import { discoverPlugins } from "./core/plugins.js";
 import { runPlugin } from "./core/orchestrator.js";
+
+const PROJECT_ROOT = dirname(import.meta.dirname);
+const CONFIG_PATH = join(PROJECT_ROOT, "config.json");
+const PLUGINS_DIR = join(PROJECT_ROOT, "plugins");
 
 const program = new Command();
 
@@ -17,7 +21,7 @@ program
   .command("list")
   .description("List installed plugins")
   .action(async () => {
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     if (plugins.length === 0) {
       console.log("No plugins found in plugins/");
       return;
@@ -31,8 +35,8 @@ program
   .command("init <plugin>")
   .description("Run first-time setup for a plugin")
   .action(async (pluginName) => {
-    const config = loadConfig("config.json");
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const config = loadConfig(CONFIG_PATH);
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     const plugin = plugins.find((p) => p.name === pluginName);
     if (!plugin) {
       console.error(`Plugin "${pluginName}" not found. Run "postkeeper list" to see available plugins.`);
@@ -45,8 +49,8 @@ program
   .command("status [plugin]")
   .description("Check plugin connectivity/auth status")
   .action(async (pluginName) => {
-    const config = loadConfig("config.json");
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const config = loadConfig(CONFIG_PATH);
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     const targets = pluginName ? plugins.filter((p) => p.name === pluginName) : plugins;
 
     if (targets.length === 0) {
@@ -72,9 +76,9 @@ program
   .command("run [plugin]")
   .description("Run plugins to fetch/import posts")
   .action(async (pluginName) => {
-    const config = loadConfig("config.json");
-    const archiveDir = resolve(config.archive_dir);
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const config = loadConfig(CONFIG_PATH);
+    const archiveDir = resolve(PROJECT_ROOT, config.archive_dir);
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     const targets = pluginName ? plugins.filter((p) => p.name === pluginName) : plugins;
 
     if (targets.length === 0) {
