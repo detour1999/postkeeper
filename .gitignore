@@ -3,3 +3,6 @@ node_modules/
 .worktrees/
 output/
 archive/
+.DS_Store
+coverage/
+*.log
