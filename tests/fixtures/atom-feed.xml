@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Atom Blog</title>
+  <link href="https://atom.example.com"/>
+  <entry>
+    <title>Atom Entry</title>
+    <link href="https://atom.example.com/entries/1"/>
+    <id>urn:uuid:1234-5678</id>
+    <published>2024-03-15T14:30:00Z</published>
+    <updated>2024-03-15T15:00:00Z</updated>
+    <author><name>Charlie</name></author>
+    <content type="html"><![CDATA[<p>Atom content</p>]]></content>
+    <category term="Atom"/>
+  </entry>
+</feed>
