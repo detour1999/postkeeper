@@ -133,6 +133,62 @@ The `context` object passed to `poll` provides:
 - `context.tmpDir` -- temporary directory for downloading media before it is moved to the archive.
 - `context.log(msg)` -- log a message under the plugin's name.
 
+## Scheduled Polling
+
+To poll automatically, set up a local cron job. Postkeeper requires a browser session on your machine, so this runs locally (not in CI).
+
+### macOS (launchd)
+
+Create `~/Library/LaunchAgents/com.postkeeper.poll.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.postkeeper.poll</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>/path/to/postkeeper/src/cli.js</string>
+    <string>poll</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/path/to/postkeeper</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>6</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/path/to/postkeeper/poll.log</string>
+  <key>StandardErrorPath</key>
+  <string>/path/to/postkeeper/poll.log</string>
+</dict>
+</plist>
+```
+
+Load it:
+```bash
+launchctl load ~/Library/LaunchAgents/com.postkeeper.poll.plist
+```
+
+### Linux (crontab)
+
+```bash
+crontab -e
+```
+
+Add:
+```
+0 6 * * * cd /path/to/postkeeper && node src/cli.js poll >> poll.log 2>&1
+```
+
+This polls daily at 6 AM. Adjust the schedule as needed.
+
 ## Limitations
 
 - Instagram requires a real browser session; there are no API keys. Sessions may expire over time -- re-run `postkeeper init instagram` if polling fails.
@@ -142,5 +198,5 @@ The `context` object passed to `poll` provides:
 ## Tests
 
 ```bash
-node --test tests/
+npm test
 ```

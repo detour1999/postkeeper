@@ -124,6 +124,23 @@ node --test tests/path.js   # run a specific test file
 - Test pure functions directly. Don't mock what you can construct.
 - Plugin integration tests (requiring real auth or network) are manual -- use `postkeeper poll` directly
 
+## Pre-commit Hooks
+
+This project uses [pre-commit](https://pre-commit.com/) to run checks before every commit.
+
+### Setup
+
+```bash
+pip install pre-commit   # or: brew install pre-commit
+pre-commit install
+```
+
+This runs automatically on every `git commit`. To run manually:
+
+```bash
+pre-commit run --all-files
+```
+
 ## Instructions for Code Agents
 
 If you're an AI agent working on this codebase:
