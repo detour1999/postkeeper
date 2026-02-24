@@ -20,14 +20,14 @@ describe("discoverPlugins", () => {
         name: "test-plugin",
         description: "A test plugin",
         async init(config) {},
-        async poll(config, context) { return { posts: [], state: {} }; },
+        async run(config, context) { return { posts: [], state: {} }; },
       };`
     );
 
     const plugins = await discoverPlugins(pluginsDir);
     assert.strictEqual(plugins.length, 1);
     assert.strictEqual(plugins[0].name, "test-plugin");
-    assert.strictEqual(typeof plugins[0].poll, "function");
+    assert.strictEqual(typeof plugins[0].run, "function");
     assert.strictEqual(typeof plugins[0].init, "function");
   });
 

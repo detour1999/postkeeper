@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { resolve, join } from "node:path";
 import { loadConfig } from "./config.js";
 import { discoverPlugins } from "./core/plugins.js";
-import { runPoll } from "./core/orchestrator.js";
+import { runPlugin } from "./core/orchestrator.js";
 
 const program = new Command();
 
@@ -69,8 +69,8 @@ program
   });
 
 program
-  .command("poll [plugin]")
-  .description("Poll for new posts")
+  .command("run [plugin]")
+  .description("Run plugins to fetch/import posts")
   .action(async (pluginName) => {
     const config = loadConfig("config.json");
     const archiveDir = resolve(config.archive_dir);
@@ -83,7 +83,7 @@ program
     }
 
     for (const plugin of targets) {
-      console.log(`\nPolling ${plugin.name}...`);
+      console.log(`\nRunning ${plugin.name}...`);
 
       // Pre-flight status check
       if (typeof plugin.status === "function") {
@@ -100,10 +100,10 @@ program
       }
 
       try {
-        await runPoll(plugin, config.plugins[plugin.name] || {}, archiveDir);
+        await runPlugin(plugin, config.plugins[plugin.name] || {}, archiveDir);
         console.log(`  ${plugin.name} done.`);
       } catch (err) {
-        console.error(`  Error polling ${plugin.name}: ${err.message}`);
+        console.error(`  Error running ${plugin.name}: ${err.message}`);
       }
 
       // Shutdown if supported

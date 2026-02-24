@@ -11,7 +11,7 @@ describe("CLI", () => {
     const output = execFileSync("node", [cli, "--help"], { encoding: "utf-8", cwd });
     assert.ok(output.includes("postkeeper"));
     assert.ok(output.includes("list"));
-    assert.ok(output.includes("poll"));
+    assert.ok(output.includes("run"));
   });
 
   test("--version shows version", () => {
@@ -38,9 +38,9 @@ describe("CLI", () => {
     );
   });
 
-  test("poll with unknown plugin fails", () => {
+  test("run with unknown plugin fails", () => {
     assert.throws(
-      () => execFileSync("node", [cli, "poll", "nonexistent"], { encoding: "utf-8", stdio: "pipe", cwd }),
+      () => execFileSync("node", [cli, "run", "nonexistent"], { encoding: "utf-8", stdio: "pipe", cwd }),
       (err) => err.status !== 0
     );
   });

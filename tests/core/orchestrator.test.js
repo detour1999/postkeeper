@@ -3,9 +3,9 @@ import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runPoll } from "../../src/core/orchestrator.js";
+import { runPlugin } from "../../src/core/orchestrator.js";
 
-describe("runPoll", () => {
+describe("runPlugin", () => {
   const tmpDir = join(import.meta.dirname, ".tmp-orchestrator-test");
   const archiveDir = join(tmpDir, "archive");
 
@@ -15,7 +15,7 @@ describe("runPoll", () => {
   test("writes AS2 and raw JSON for each post returned by plugin", async () => {
     const fakePlugin = {
       name: "testplatform",
-      async poll(config, context) {
+      async run(config, context) {
         return {
           posts: [
             {
@@ -43,7 +43,7 @@ describe("runPoll", () => {
       },
     };
 
-    await runPoll(fakePlugin, {}, archiveDir);
+    await runPlugin(fakePlugin, {}, archiveDir);
 
     const as2Path = join(archiveDir, "testplatform", "posts", "testuser", "2024-03-15-ABC123.as2.json");
     const rawPath = join(archiveDir, "testplatform", "posts", "testuser", "2024-03-15-ABC123.raw.json");
@@ -75,13 +75,13 @@ describe("runPoll", () => {
     let receivedState = null;
     const fakePlugin = {
       name: "testplatform",
-      async poll(config, context) {
+      async run(config, context) {
         receivedState = context.state;
         return { posts: [], state: existingState };
       },
     };
 
-    await runPoll(fakePlugin, {}, archiveDir);
+    await runPlugin(fakePlugin, {}, archiveDir);
     assert.deepStrictEqual(receivedState, existingState);
   });
 
@@ -92,7 +92,7 @@ describe("runPoll", () => {
 
     const fakePlugin = {
       name: "testplatform",
-      async poll(config, context) {
+      async run(config, context) {
         return {
           posts: [
             {
@@ -120,7 +120,7 @@ describe("runPoll", () => {
       },
     };
 
-    await runPoll(fakePlugin, {}, archiveDir);
+    await runPlugin(fakePlugin, {}, archiveDir);
 
     const mediaPath = join(archiveDir, "testplatform", "posts", "testuser", "2024-06-01-IMG001", "1.jpg");
     assert.ok(existsSync(mediaPath), "Media file should be moved to archive");

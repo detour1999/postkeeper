@@ -31,7 +31,7 @@ export default {
       context.on("close", resolve);
     });
 
-    console.log("Session saved. You can now run: postkeeper poll instagram");
+    console.log("Session saved. You can now run: postkeeper run instagram");
   },
 
   async status(config) {
@@ -61,7 +61,7 @@ export default {
     }
   },
 
-  async poll(config, context) {
+  async run(config, context) {
     const profiles = config.profiles || [];
     if (profiles.length === 0) {
       context.log("No profiles configured.");

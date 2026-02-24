@@ -19,7 +19,7 @@ function savePluginState(archiveDir, pluginName, state) {
   writeFileSync(statePath, JSON.stringify(state, null, 2));
 }
 
-export async function runPoll(plugin, pluginConfig, archiveDir) {
+export async function runPlugin(plugin, pluginConfig, archiveDir) {
   const state = loadPluginState(archiveDir, plugin.name);
   const tmpDir = mkdtempSync(join(tmpdir(), `postkeeper-${plugin.name}-`));
 
@@ -29,7 +29,7 @@ export async function runPoll(plugin, pluginConfig, archiveDir) {
     log: (msg) => console.log(`  [${plugin.name}] ${msg}`),
   };
 
-  const result = await plugin.poll(pluginConfig, context);
+  const result = await plugin.run(pluginConfig, context);
 
   for (const post of result.posts) {
     const { activity, raw, media } = post;
