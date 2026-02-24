@@ -15,6 +15,16 @@
   },
   "keywords": [],
   "author": "Dylan Richard",
+  "files": [
+    "src/",
+    "plugins/",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/detour1999/postkeeper.git"
+  },
   "license": "MIT",
   "description": "Local social media archiver with plugin support",
   "dependencies": {
