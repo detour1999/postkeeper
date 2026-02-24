@@ -4,6 +4,23 @@ A local-first personal social media archiver with plugin support.
 
 Archives posts as [ActivityStreams 2.0](https://www.w3.org/TR/activitystreams-core/) JSON with raw platform data preserved alongside. Media files (images, videos) are downloaded and stored locally.
 
+## Install
+
+```bash
+npm install -g github:detour1999/postkeeper
+npx playwright install chromium
+```
+
+Or clone and link locally:
+
+```bash
+git clone https://github.com/detour1999/postkeeper.git
+cd postkeeper
+npm install
+npx playwright install chromium
+npm link
+```
+
 ## Setup
 
 ```bash

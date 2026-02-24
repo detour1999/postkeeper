@@ -13,6 +13,10 @@ Known gaps and improvement ideas. Not urgent -- tracked here for visibility.
 - [ ] AS2 converter in core is coupled to Instagram's parsed post shape -- when adding a second plugin, decide whether to move conversion into plugins or formalize the intermediate post format (`src/core/as2.js`)
 - [ ] `tag` array includes `href: undefined` for unknown platforms -- should use conditional spread (`src/core/as2.js:38`)
 
+## Distribution
+
+- [ ] Publish to npm registry for `npm install -g postkeeper` (when there's usage demand)
+
 ## Testing
 
 - [ ] No tests for migration script (`scripts/migrate-from-instapost.js`)
