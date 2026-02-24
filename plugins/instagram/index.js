@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { fetchProfilePosts, fetchPostDetails, parsePost } from "./extractor.js";
 import { downloadMedia } from "./downloader.js";
+import { toAS2 } from "./as2.js";
 
 let browserContext = null;
 
@@ -108,8 +109,9 @@ export default {
 
             const mediaFiles = await downloadMedia(postData.media, context.tmpDir, shortcode, context.log);
 
+            const as2 = toAS2(postData);
             allPosts.push({
-              activity: postData,
+              as2,
               raw: rawNode,
               media: mediaFiles,
             });

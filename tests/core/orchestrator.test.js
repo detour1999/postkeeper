@@ -12,28 +12,32 @@ describe("runPlugin", () => {
   beforeEach(() => mkdirSync(tmpDir, { recursive: true }));
   afterEach(() => rmSync(tmpDir, { recursive: true, force: true }));
 
+  function makeAS2(overrides = {}) {
+    return {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      type: "Note",
+      id: "https://example.com/p/ABC123/",
+      url: "https://example.com/p/ABC123/",
+      published: "2024-03-15T14:30:00.000Z",
+      attributedTo: { type: "Person", name: "testuser", url: "https://example.com/testuser/" },
+      content: "Hello",
+      attachment: [{ type: "Image", mediaType: "image/jpeg", url: "1.jpg" }],
+      tag: [],
+      likes: { type: "Collection", totalItems: 10 },
+      replies: { type: "Collection", totalItems: 2 },
+      generator: { type: "Application", name: "Testplatform" },
+      ...overrides,
+    };
+  }
+
   test("writes AS2 and raw JSON for each post returned by plugin", async () => {
     const fakePlugin = {
       name: "testplatform",
-      async run(config, context) {
+      async run() {
         return {
           posts: [
             {
-              activity: {
-                shortcode: "ABC123",
-                url: "https://example.com/p/ABC123/",
-                id: "1",
-                username: "testuser",
-                timestamp: "2024-03-15T14:30:00.000Z",
-                caption: "Hello",
-                location: null,
-                tagged_users: [],
-                alt_text: null,
-                likes: 10,
-                comments: 2,
-                media_type: "image",
-                media: [{ type: "image", url: "https://example.com/img.jpg", file: "1.jpg" }],
-              },
+              as2: makeAS2(),
               raw: { original: "data", id: "abc" },
               media: [],
             },
@@ -92,25 +96,15 @@ describe("runPlugin", () => {
 
     const fakePlugin = {
       name: "testplatform",
-      async run(config, context) {
+      async run() {
         return {
           posts: [
             {
-              activity: {
-                shortcode: "IMG001",
-                url: "https://example.com/p/IMG001/",
-                id: "2",
-                username: "testuser",
-                timestamp: "2024-06-01T12:00:00.000Z",
-                caption: "photo",
-                location: null,
-                tagged_users: [],
-                alt_text: null,
-                likes: 0,
-                comments: 0,
-                media_type: "image",
-                media: [{ type: "image", url: "https://example.com/img.jpg", file: "1.jpg" }],
-              },
+              as2: makeAS2({
+                id: "https://example.com/p/IMG001/",
+                published: "2024-06-01T12:00:00.000Z",
+                content: "photo",
+              }),
               raw: {},
               media: [{ relativePath: "1.jpg", tmpPath: join(fakeTmpDir, "1.jpg") }],
             },
@@ -125,5 +119,64 @@ describe("runPlugin", () => {
     const mediaPath = join(archiveDir, "testplatform", "posts", "testuser", "2024-06-01-IMG001", "1.jpg");
     assert.ok(existsSync(mediaPath), "Media file should be moved to archive");
     assert.strictEqual(readFileSync(mediaPath, "utf-8"), "fake image data");
+  });
+
+  test("skips posts with invalid AS2", async () => {
+    const fakePlugin = {
+      name: "testplatform",
+      async run() {
+        return {
+          posts: [
+            {
+              as2: { type: "Note" }, // missing @context, id, published, attributedTo
+              raw: { id: "bad" },
+              media: [],
+            },
+            {
+              as2: makeAS2({ id: "https://example.com/p/GOOD001/" }),
+              raw: { id: "good" },
+              media: [],
+            },
+          ],
+          state: {},
+        };
+      },
+    };
+
+    await runPlugin(fakePlugin, {}, archiveDir);
+
+    // The bad post should not be written
+    const badPath = join(archiveDir, "testplatform", "posts", "testuser", "undefined-Note.as2.json");
+    assert.ok(!existsSync(badPath), "Invalid AS2 post should not be written");
+
+    // The good post should be written
+    const goodPath = join(archiveDir, "testplatform", "posts", "testuser", "2024-03-15-GOOD001.as2.json");
+    assert.ok(existsSync(goodPath), "Valid AS2 post should be written");
+  });
+
+  test("derives filename from AS2 id URL", async () => {
+    const fakePlugin = {
+      name: "testplatform",
+      async run() {
+        return {
+          posts: [
+            {
+              as2: makeAS2({
+                id: "https://example.com/posts/my-slug/",
+                published: "2025-01-20T10:00:00.000Z",
+              }),
+              raw: {},
+              media: [],
+            },
+          ],
+          state: {},
+        };
+      },
+    };
+
+    await runPlugin(fakePlugin, {}, archiveDir);
+
+    const as2Path = join(archiveDir, "testplatform", "posts", "testuser", "2025-01-20-my-slug.as2.json");
+    assert.ok(existsSync(as2Path), "Filename should be derived from AS2 id URL slug");
   });
 });

@@ -10,7 +10,7 @@
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
-import { toAS2 } from "../src/core/as2.js";
+import { toAS2 } from "../plugins/instagram/as2.js";
 
 const dryRun = process.argv.includes("--dry-run");
 const sourceDir = "output/posts";
