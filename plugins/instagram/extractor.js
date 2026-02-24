@@ -1,4 +1,4 @@
-// src/extractor.js
+// plugins/instagram/extractor.js
 
 /**
  * Extract the best image URL from an image_versions2 object.
@@ -74,6 +74,7 @@ export function parsePost(node) {
  * or until there are no more pages.
  * Returns an array of raw post nodes from the timeline.
  */
+/* c8 ignore start -- requires Playwright browser page, tested manually */
 export async function fetchProfilePosts(page, username, lastSeenTimestamp = null) {
   const posts = [];
   let hasNextPage = true;
@@ -204,3 +205,4 @@ export async function fetchPostDetails(page, shortcode) {
 
   return postNode;
 }
+/* c8 ignore stop */
