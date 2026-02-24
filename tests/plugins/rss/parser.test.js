@@ -132,6 +132,74 @@ describe("parseFeed", () => {
     assert.deepStrictEqual(a.tag, []);
   });
 
+  test("handles Atom entry with non-alternate link rel", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Rel Blog</title>
+  <entry>
+    <title>Rel Entry</title>
+    <link rel="enclosure" href="https://example.com/enc"/>
+    <link rel="alternate" href="https://example.com/alt"/>
+    <id>urn:uuid:rel</id>
+    <published>2024-01-01T00:00:00Z</published>
+    <author><name>Test</name></author>
+    <content type="html"><![CDATA[<b>HTML</b>]]></content>
+  </entry>
+</feed>`;
+    const articles = parseFeed(xml, "Test");
+    // Should pick the alternate link
+    assert.strictEqual(articles[0].id, "https://example.com/alt");
+  });
+
+  test("handles Atom entry with no published and no updated", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>No Date Blog</title>
+  <entry>
+    <title>No Date</title>
+    <link href="https://example.com/nodate"/>
+    <id>urn:uuid:nodate</id>
+    <author><name>Test</name></author>
+    <content>Just text</content>
+  </entry>
+</feed>`;
+    const articles = parseFeed(xml, "Test");
+    assert.strictEqual(articles[0].published, null);
+  });
+
+  test("handles Atom entry with no link elements", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>No Link Blog</title>
+  <entry>
+    <title>No Link</title>
+    <id>urn:uuid:nolink</id>
+    <published>2024-01-01T00:00:00Z</published>
+    <author><name>Test</name></author>
+  </entry>
+</feed>`;
+    const articles = parseFeed(xml, "Test");
+    assert.strictEqual(articles[0].id, "");
+    assert.strictEqual(articles[0].url, "");
+  });
+
+  test("handles Atom category with @_label instead of @_term", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Label Blog</title>
+  <entry>
+    <title>Labels</title>
+    <link href="https://example.com/labels"/>
+    <id>urn:uuid:labels</id>
+    <published>2024-01-01T00:00:00Z</published>
+    <author><name>Test</name></author>
+    <category label="My Label"/>
+  </entry>
+</feed>`;
+    const articles = parseFeed(xml, "Test");
+    assert.strictEqual(articles[0].tag[0].name, "My Label");
+  });
+
   test("handles RSS item with author field instead of dc:creator", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">

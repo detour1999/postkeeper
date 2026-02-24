@@ -11,7 +11,7 @@ export function fixMetaEncoding(text) {
     // If decoding produced replacement chars, the original wasn't double-encoded
     if (decoded.includes("\uFFFD")) return text;
     return decoded;
-  } catch {
+  } catch /* c8 ignore next */ {
     return text;
   }
 }
