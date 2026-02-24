@@ -106,7 +106,7 @@ export default {
             const rawNode = fullNode || node;
             const postData = parsePost(rawNode);
 
-            const mediaFiles = await downloadMedia(postData.media, context.tmpDir, shortcode);
+            const mediaFiles = await downloadMedia(postData.media, context.tmpDir, shortcode, context.log);
 
             allPosts.push({
               activity: postData,
