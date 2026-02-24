@@ -198,5 +198,5 @@ This polls daily at 6 AM. Adjust the schedule as needed.
 ## Tests
 
 ```bash
-node --test tests/
+npm test
 ```
