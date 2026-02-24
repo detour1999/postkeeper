@@ -14,8 +14,8 @@
     "test:coverage": "c8 --check-coverage --lines 90 --branches 80 --functions 80 --exclude='plugins/instagram/index.js' --exclude='src/cli.js' --exclude='tests/**' node --test"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Dylan Richard",
+  "license": "MIT",
   "description": "Local social media archiver with plugin support",
   "dependencies": {
     "commander": "^14.0.3",
