@@ -1,7 +1,7 @@
-// tests/extractor.test.js
+// tests/plugins/instagram/extractor.test.js
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parsePost } from "../src/extractor.js";
+import { parsePost } from "../../../plugins/instagram/extractor.js";
 
 describe("parsePost", () => {
   test("parses a single image post", () => {
