@@ -1,8 +1,8 @@
-# InstaPost
+# postkeeper
 
-Poll Instagram profiles and download posts (media + metadata) locally.
+A local-first personal social media archiver with plugin support.
 
-Uses Playwright to automate a real browser session, intercepting Instagram's internal GraphQL API to get structured post data. No official API credentials needed.
+Archives posts as [ActivityStreams 2.0](https://www.w3.org/TR/activitystreams-core/) JSON with raw platform data preserved alongside. Media files (images, videos) are downloaded and stored locally.
 
 ## Setup
 
@@ -11,90 +11,133 @@ npm install
 npx playwright install chromium
 ```
 
-## Usage
-
-### 1. Log in to Instagram
+## Quick Start
 
 ```bash
-node src/cli.js login
+postkeeper init instagram    # first-time browser login
+postkeeper poll              # poll all configured plugins
+postkeeper poll instagram    # poll a single plugin
+postkeeper status            # check auth/connectivity
+postkeeper list              # show installed plugins
 ```
 
-A browser window opens. Log in to Instagram manually, then close the browser. Your session is saved to `.browser-profile/` for future headless runs.
+## Configuration
 
-### 2. Configure profiles
-
-Edit `config.json` and add the Instagram usernames you want to poll:
+Edit `config.json` in the project root:
 
 ```json
 {
-  "profiles": ["username1", "username2"],
-  "output_dir": "./output",
-  "profile_dir": "./.browser-profile"
+  "archive_dir": "./archive",
+  "plugins": {
+    "instagram": {
+      "profiles": ["username1", "username2"],
+      "profile_dir": "./.browser-profile"
+    }
+  }
 }
 ```
 
-### 3. Poll for posts
+- `archive_dir` -- where archived posts and media are written.
+- `plugins` -- per-plugin configuration. Each key matches a plugin's `name`.
 
-```bash
-node src/cli.js poll
-```
-
-On the first run, this scrolls through the entire post history for each profile. Subsequent runs only fetch posts newer than the last seen timestamp.
-
-## Output
+## Output Format
 
 ```
-output/
-  state.json                          # tracks last seen post per profile
-  posts/
-    username1/
-      2024-03-15-BxK3j2hA1.json      # post metadata
-      2024-03-15-BxK3j2hA1/          # media files
-        1.jpg
-        2.jpg
-        3.mp4
-    username2/
-      ...
+archive/
+  instagram/
+    state.json
+    posts/
+      username1/
+        2024-03-15-BxK3j2hA1.as2.json
+        2024-03-15-BxK3j2hA1.raw.json
+        2024-03-15-BxK3j2hA1/
+          1.jpg
+          2.mp4
+      username2/
+        ...
 ```
 
-### Post JSON structure
+- `.as2.json` -- ActivityStreams 2.0 representation of the post.
+- `.raw.json` -- unmodified platform data as returned by the plugin.
+- Media directory -- downloaded images and videos, named by index.
+
+### AS2 Example
 
 ```json
 {
-  "shortcode": "BxK3j2hA1",
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "type": "Note",
+  "id": "https://www.instagram.com/p/BxK3j2hA1/",
   "url": "https://www.instagram.com/p/BxK3j2hA1/",
-  "id": "123456789",
-  "username": "username1",
-  "timestamp": "2024-03-15T14:30:00.000Z",
-  "caption": "The full caption text...",
-  "location": { "name": "Portland, OR", "id": "12345" },
-  "tagged_users": ["friend1", "friend2"],
-  "alt_text": "Photo description",
-  "likes": 42,
-  "comments": 3,
-  "media_type": "carousel",
-  "media": [
-    { "type": "image", "url": "https://...", "file": "1.jpg" },
-    { "type": "image", "url": "https://...", "file": "2.jpg" },
-    { "type": "video", "url": "https://...", "file": "3.mp4" }
-  ]
+  "published": "2024-03-15T14:30:00.000Z",
+  "attributedTo": {
+    "type": "Person",
+    "name": "username1",
+    "url": "https://www.instagram.com/username1/"
+  },
+  "content": "The full caption text...",
+  "attachment": [
+    { "type": "Image", "mediaType": "image/jpeg", "url": "1.jpg" },
+    { "type": "Video", "mediaType": "video/mp4", "url": "2.mp4" }
+  ],
+  "location": { "type": "Place", "name": "Portland, OR" },
+  "generator": { "type": "Application", "name": "Instagram" }
 }
 ```
 
-## How it works
+## Instagram Plugin
 
-1. **Authentication**: Playwright persistent browser context. Login once manually, reuse the session headlessly.
-2. **Data extraction**: Navigates to each profile page and intercepts GraphQL API responses (not DOM scraping) to get structured post data.
-3. **Pagination**: Scrolls down the profile page to trigger loading of older posts, stopping when it reaches posts already seen.
-4. **Full post details**: For each new post, navigates to its permalink to get complete data including all carousel items.
-5. **Rate limiting**: Random delays between requests (1-3s between posts, 2-5s between profiles).
+The built-in Instagram plugin archives posts from public or followed profiles.
+
+**Configuration:**
+
+- `profiles` -- list of Instagram usernames to poll.
+- `profile_dir` -- path to the Playwright browser profile directory.
+
+**How it works:**
+
+1. `postkeeper init instagram` opens a real Chromium browser window. Log in manually, then close the window. The session is persisted to `profile_dir`.
+2. `postkeeper poll instagram` launches a headless browser, navigates to each profile, and intercepts Instagram's internal GraphQL API responses to extract structured post data.
+3. Pagination is driven by scrolling the profile page. On the first run it scrolls through the full history; subsequent runs stop when reaching the last seen post timestamp.
+4. For each new post, the plugin fetches full details (including all carousel items), downloads media, and returns the data to the orchestrator for AS2 conversion and storage.
+
+## Writing Plugins
+
+Plugins live in the `plugins/` directory. Each plugin is a directory with an `index.js` that default-exports an object implementing the plugin interface:
+
+```js
+export default {
+  name: "my-plugin",
+  description: "Short description of what it archives",
+
+  // First-time setup (e.g. browser login, OAuth flow).
+  async init(config) { /* ... */ },
+
+  // Check if the plugin can connect/authenticate. Return { ok, message }.
+  async status(config) { /* ... */ },
+
+  // Fetch new posts. Return { posts, state }.
+  // Each post in the array: { activity, raw, media }
+  //   activity -- parsed post object (used for AS2 conversion)
+  //   raw      -- original platform data (saved as .raw.json)
+  //   media    -- array of { file, localPath } for downloaded files
+  async poll(config, context) { /* ... */ },
+
+  // Cleanup (e.g. close browser). Optional.
+  async shutdown() { /* ... */ },
+};
+```
+
+The `context` object passed to `poll` provides:
+- `context.state` -- previous plugin state (for tracking last-seen timestamps).
+- `context.tmpDir` -- temporary directory for downloading media before it is moved to the archive.
+- `context.log(msg)` -- log a message under the plugin's name.
 
 ## Limitations
 
-- Requires a real Instagram login session (no API keys)
-- Session may expire; re-run `login` if polling starts failing
-- Music data is not available on web
-- Instagram frontend changes could break GraphQL interception
+- Instagram requires a real browser session; there are no API keys. Sessions may expire over time -- re-run `postkeeper init instagram` if polling fails.
+- Music metadata is not available on the Instagram web interface.
+- Platform frontend or API changes could break plugin extractors at any time.
 
 ## Tests
 
