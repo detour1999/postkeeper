@@ -6,3 +6,4 @@ archive/
 .DS_Store
 coverage/
 *.log
+plugins/*/node_modules/

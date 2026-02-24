@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // src/cli.js
 import { Command } from "commander";
+import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { resolve, join, dirname } from "node:path";
 import { loadConfig } from "./config.js";
 import { discoverPlugins } from "./core/plugins.js";
@@ -41,6 +43,12 @@ program
     if (!plugin) {
       console.error(`Plugin "${pluginName}" not found. Run "postkeeper list" to see available plugins.`);
       process.exit(1);
+    }
+    const pluginDir = join(PLUGINS_DIR, pluginName);
+    const pluginPkgJson = join(pluginDir, "package.json");
+    if (existsSync(pluginPkgJson)) {
+      console.log(`Installing dependencies for ${pluginName}...`);
+      execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
     }
     await plugin.init(config.plugins[pluginName] || {});
   });
