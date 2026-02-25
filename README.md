@@ -33,30 +33,33 @@ npx playwright install chromium
 ## Quick Start
 
 ```bash
-postkeeper init instagram    # first-time browser login
+postkeeper init instagram    # creates ~/.config/postkeeper/, first-time browser login
 postkeeper run               # run all configured plugins
 postkeeper run instagram     # run a single plugin
 postkeeper status            # check auth/connectivity
 postkeeper list              # show installed plugins
 ```
 
+Archive data is stored at `~/.local/share/postkeeper/archive/`.
+
 ## Configuration
 
-Edit `config.json` in the project root:
+Config is stored at `~/.config/postkeeper/config.json` (created by `postkeeper init`).
+
+Override directories with environment variables:
+- `POSTKEEPER_CONFIG_DIR` -- config directory (default: `~/.config/postkeeper/`)
+- `POSTKEEPER_DATA_DIR` -- data directory (default: `~/.local/share/postkeeper/`)
 
 ```json
 {
-  "archive_dir": "./archive",
   "plugins": {
     "instagram": {
-      "profiles": ["username1", "username2"],
-      "profile_dir": "./.browser-profile"
+      "profiles": ["username1", "username2"]
     }
   }
 }
 ```
 
-- `archive_dir` -- where archived posts and media are written.
 - `plugins` -- per-plugin configuration. Each key matches a plugin's `name`.
 
 ## Output Format
@@ -111,11 +114,10 @@ The built-in Instagram plugin archives posts from public or followed profiles.
 **Configuration:**
 
 - `profiles` -- list of Instagram usernames to poll.
-- `profile_dir` -- path to the Playwright browser profile directory.
 
 **How it works:**
 
-1. `postkeeper init instagram` opens a real Chromium browser window. Log in manually, then close the window. The session is persisted to `profile_dir`.
+1. `postkeeper init instagram` opens a real Chromium browser window. Log in manually, then close the window. The browser session is persisted to the plugin's data directory.
 2. `postkeeper run instagram` launches a headless browser, navigates to each profile, and intercepts Instagram's internal GraphQL API responses to extract structured post data.
 3. Pagination is driven by scrolling the profile page. On the first run it scrolls through the full history; subsequent runs stop when reaching the last seen post timestamp.
 4. For each new post, the plugin fetches full details (including all carousel items), downloads media, and returns an AS2 object with raw data for storage.
@@ -175,10 +177,12 @@ export default {
   description: "Short description of what it archives",
 
   // First-time setup (e.g. browser login, OAuth flow).
-  async init(config) { /* ... */ },
+  // context provides: context.dataDir, context.log(msg)
+  async init(config, context) { /* ... */ },
 
   // Check if the plugin can connect/authenticate. Return { ok, message }.
-  async status(config) { /* ... */ },
+  // context provides: context.dataDir, context.log(msg)
+  async status(config, context) { /* ... */ },
 
   // Fetch new posts. Return { posts, state }.
   // Each post in the array: { as2, raw, media }
@@ -195,6 +199,7 @@ export default {
 The `context` object passed to `run` provides:
 - `context.state` -- previous plugin state (for tracking last-seen timestamps).
 - `context.tmpDir` -- temporary directory for downloading media before it is moved to the archive.
+- `context.dataDir` -- plugin-specific persistent data directory.
 - `context.log(msg)` -- log a message under the plugin's name.
 
 Plugins can have their own `package.json` for dependencies. Run `postkeeper init <name>` to install them.

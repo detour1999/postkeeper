@@ -8,9 +8,21 @@ import { runPlugin } from "../../src/core/orchestrator.js";
 describe("runPlugin", () => {
   const tmpDir = join(import.meta.dirname, ".tmp-orchestrator-test");
   const archiveDir = join(tmpDir, "archive");
+  let origDataDir;
 
-  beforeEach(() => mkdirSync(tmpDir, { recursive: true }));
-  afterEach(() => rmSync(tmpDir, { recursive: true, force: true }));
+  beforeEach(() => {
+    origDataDir = process.env.POSTKEEPER_DATA_DIR;
+    process.env.POSTKEEPER_DATA_DIR = join(tmpDir, "data");
+    mkdirSync(tmpDir, { recursive: true });
+  });
+  afterEach(() => {
+    if (origDataDir === undefined) {
+      delete process.env.POSTKEEPER_DATA_DIR;
+    } else {
+      process.env.POSTKEEPER_DATA_DIR = origDataDir;
+    }
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
 
   function makeAS2(overrides = {}) {
     return {
@@ -180,6 +192,20 @@ describe("runPlugin", () => {
     // After sanitization, colons become hyphens
     const as2Path = join(archiveDir, "testplatform", "posts", "testuser", "2025-12-26-instagram-18035531567732190.as2.json");
     assert.ok(existsSync(as2Path), "Should sanitize colons in derived filename");
+  });
+
+  test("passes dataDir in context", async () => {
+    let receivedDataDir = null;
+    const fakePlugin = {
+      name: "testplatform",
+      async run(config, context) {
+        receivedDataDir = context.dataDir;
+        return { posts: [], state: {} };
+      },
+    };
+    await runPlugin(fakePlugin, {}, archiveDir);
+    assert.ok(receivedDataDir);
+    assert.ok(receivedDataDir.includes("testplatform"));
   });
 
   test("derives filename from AS2 id URL", async () => {

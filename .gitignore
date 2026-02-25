@@ -7,3 +7,4 @@ archive/
 coverage/
 *.log
 plugins/*/node_modules/
+config.json

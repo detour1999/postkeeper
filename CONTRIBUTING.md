@@ -48,17 +48,21 @@ export default {
   name: "my-plugin",
   description: "Archives posts from My Platform",
 
-  async init(config) {
+  async init(config, context) {
     // First-time setup: browser login, OAuth flow, config validation.
     // Called via: postkeeper init my-plugin
+    //
+    // context.dataDir - plugin-specific persistent data directory
+    // context.log(msg) - log under plugin name
   },
 
   async run(config, context) {
     // Fetch new posts, download media to context.tmpDir, return results.
     // Called via: postkeeper run my-plugin
     //
-    // context.state  - previous state (for tracking what's already archived)
-    // context.tmpDir - temp directory for media downloads
+    // context.state   - previous state (for tracking what's already archived)
+    // context.tmpDir  - temp directory for media downloads
+    // context.dataDir - plugin-specific persistent data directory
     // context.log(msg) - log under the plugin's name
     //
     // Return: { posts: [...], state: { ... } }
@@ -72,7 +76,8 @@ export default {
 ```js
   // Check auth/connectivity. Return { ok: boolean, message: string }.
   // Called automatically before run (pre-flight) and via: postkeeper status
-  async status(config) { ... },
+  async status(config, context) { ... },
+  // context provides: context.dataDir, context.log(msg)
 
   // Cleanup (close browser contexts, connections, etc.)
   async shutdown() { ... },

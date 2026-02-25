@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync, renameSync, copyFileSync, unlinkSync, existsS
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { validateAS2 } from "./as2.js";
+import { getPluginDataDir } from "./paths.js";
 
 function loadPluginState(archiveDir, pluginName) {
   const statePath = join(archiveDir, pluginName, "state.json");
@@ -43,6 +44,7 @@ export async function runPlugin(plugin, pluginConfig, archiveDir) {
   const context = {
     state,
     tmpDir,
+    dataDir: getPluginDataDir(plugin.name),
     log: (msg) => console.log(`  [${plugin.name}] ${msg}`),
   };
 

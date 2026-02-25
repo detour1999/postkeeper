@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { resolve } from "node:path";
+import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { fetchProfilePosts, fetchPostDetails, parsePost } from "./extractor.js";
 import { downloadMedia } from "./downloader.js";
@@ -11,40 +11,40 @@ export default {
   name: "instagram",
   description: "Instagram profile archiver",
 
-  async init(config) {
-    const profileDir = resolve(config.profile_dir || "./.browser-profile");
+  async init(config, context) {
+    const profileDir = join(context.dataDir, "browser-profile");
 
     console.log("Opening browser for Instagram login...");
     console.log(`Browser profile will be saved to: ${profileDir}`);
 
-    const context = await chromium.launchPersistentContext(profileDir, {
+    const browserCtx = await chromium.launchPersistentContext(profileDir, {
       headless: false,
       viewport: { width: 1280, height: 900 },
     });
 
-    const page = context.pages()[0] || await context.newPage();
+    const page = browserCtx.pages()[0] || await browserCtx.newPage();
     await page.goto("https://www.instagram.com/");
 
     console.log("Log in to Instagram in the browser window.");
     console.log("When you're done, close the browser window.");
 
     await new Promise((resolve) => {
-      context.on("close", resolve);
+      browserCtx.on("close", resolve);
     });
 
     console.log("Session saved. You can now run: postkeeper run instagram");
   },
 
-  async status(config) {
-    const profileDir = resolve(config.profile_dir || "./.browser-profile");
+  async status(config, context) {
+    const profileDir = join(context.dataDir, "browser-profile");
     if (!existsSync(profileDir)) {
       return { ok: false, message: "No browser profile found. Run: postkeeper init instagram" };
     }
 
-    let context;
+    let browserCtx;
     try {
-      context = await chromium.launchPersistentContext(profileDir, { headless: true });
-      const page = await context.newPage();
+      browserCtx = await chromium.launchPersistentContext(profileDir, { headless: true });
+      const page = await browserCtx.newPage();
       await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(3000);
 
@@ -52,12 +52,12 @@ export default {
         return !document.querySelector('input[name="username"]');
       });
 
-      await context.close();
+      await browserCtx.close();
       return loggedIn
         ? { ok: true, message: "Session valid" }
         : { ok: false, message: "Session expired. Run: postkeeper init instagram" };
     } catch (err) {
-      if (context) await context.close().catch(() => {});
+      if (browserCtx) await browserCtx.close().catch(() => {});
       return { ok: false, message: err.message };
     }
   },
@@ -69,7 +69,7 @@ export default {
       return { posts: [], state: context.state };
     }
 
-    const profileDir = resolve(config.profile_dir || "./.browser-profile");
+    const profileDir = join(context.dataDir, "browser-profile");
     browserContext = await chromium.launchPersistentContext(profileDir, { headless: true });
     const page = await browserContext.newPage();
 
