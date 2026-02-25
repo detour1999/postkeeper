@@ -26,8 +26,8 @@ function mediaTypeFromUri(uri) {
 
 export function parseInstagramJSON(posts, username) {
   return posts.map((post, index) => {
-    const timestamp = post.creation_timestamp;
-    const published = new Date(timestamp * 1000).toISOString();
+    const timestamp = post.creation_timestamp || (post.media?.[0]?.creation_timestamp) || 0;
+    const published = timestamp ? new Date(timestamp * 1000).toISOString() : new Date(0).toISOString();
     const caption = fixMetaEncoding(post.title || "");
     const mediaItems = post.media || [];
     const mediaUris = mediaItems.map((m) => m.uri);
@@ -56,8 +56,8 @@ export function parseInstagramJSON(posts, username) {
 
 export function parseFacebookJSON(posts, username) {
   return posts.map((post, index) => {
-    const timestamp = post.timestamp;
-    const published = new Date(timestamp * 1000).toISOString();
+    const timestamp = post.timestamp || 0;
+    const published = timestamp ? new Date(timestamp * 1000).toISOString() : new Date(0).toISOString();
 
     // Extract post text from data array
     const dataEntries = post.data || [];
