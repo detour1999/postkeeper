@@ -3,7 +3,64 @@ import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runPlugin } from "../../src/core/orchestrator.js";
+import { runPlugin, scanArchive } from "../../src/core/orchestrator.js";
+
+describe("scanArchive", () => {
+  const tmpDir = join(import.meta.dirname, ".tmp-scan-test");
+
+  beforeEach(() => mkdirSync(tmpDir, { recursive: true }));
+  afterEach(() => rmSync(tmpDir, { recursive: true, force: true }));
+
+  test("returns empty sets when archive does not exist", () => {
+    const { archivedIds, latestByAuthor } = scanArchive(tmpDir, "nope");
+    assert.strictEqual(archivedIds.size, 0);
+    assert.deepStrictEqual(latestByAuthor, {});
+  });
+
+  test("collects ids and latest timestamps from .as2.json files", () => {
+    const postsDir = join(tmpDir, "testplatform", "posts", "alice");
+    mkdirSync(postsDir, { recursive: true });
+
+    writeFileSync(join(postsDir, "2024-01-01-a.as2.json"), JSON.stringify({
+      id: "https://example.com/p/A/",
+      published: "2024-01-01T00:00:00.000Z",
+    }));
+    writeFileSync(join(postsDir, "2024-06-15-b.as2.json"), JSON.stringify({
+      id: "https://example.com/p/B/",
+      published: "2024-06-15T12:00:00.000Z",
+    }));
+
+    const { archivedIds, latestByAuthor } = scanArchive(tmpDir, "testplatform");
+
+    assert.ok(archivedIds.has("https://example.com/p/A/"));
+    assert.ok(archivedIds.has("https://example.com/p/B/"));
+    assert.strictEqual(archivedIds.size, 2);
+    assert.strictEqual(latestByAuthor.alice, "2024-06-15T12:00:00.000Z");
+  });
+
+  test("tracks latest per author across multiple authors", () => {
+    for (const [author, pub] of [["alice", "2024-03-01T00:00:00.000Z"], ["bob", "2024-05-01T00:00:00.000Z"]]) {
+      const dir = join(tmpDir, "tp", "posts", author);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "post.as2.json"), JSON.stringify({ id: `id:${author}`, published: pub }));
+    }
+
+    const { latestByAuthor } = scanArchive(tmpDir, "tp");
+    assert.strictEqual(latestByAuthor.alice, "2024-03-01T00:00:00.000Z");
+    assert.strictEqual(latestByAuthor.bob, "2024-05-01T00:00:00.000Z");
+  });
+
+  test("skips malformed JSON files", () => {
+    const postsDir = join(tmpDir, "tp", "posts", "alice");
+    mkdirSync(postsDir, { recursive: true });
+    writeFileSync(join(postsDir, "bad.as2.json"), "not json{{{");
+    writeFileSync(join(postsDir, "good.as2.json"), JSON.stringify({ id: "good", published: "2024-01-01T00:00:00.000Z" }));
+
+    const { archivedIds } = scanArchive(tmpDir, "tp");
+    assert.strictEqual(archivedIds.size, 1);
+    assert.ok(archivedIds.has("good"));
+  });
+});
 
 describe("runPlugin", () => {
   const tmpDir = join(import.meta.dirname, ".tmp-orchestrator-test");
@@ -54,7 +111,6 @@ describe("runPlugin", () => {
               media: [],
             },
           ],
-          state: { lastSeen: "2024-03-15T14:30:00.000Z" },
         };
       },
     };
@@ -63,11 +119,9 @@ describe("runPlugin", () => {
 
     const as2Path = join(archiveDir, "testplatform", "posts", "testuser", "2024-03-15-ABC123.as2.json");
     const rawPath = join(archiveDir, "testplatform", "posts", "testuser", "2024-03-15-ABC123.raw.json");
-    const statePath = join(archiveDir, "testplatform", "state.json");
 
     assert.ok(existsSync(as2Path), "AS2 file should exist");
     assert.ok(existsSync(rawPath), "Raw file should exist");
-    assert.ok(existsSync(statePath), "State file should exist");
 
     const as2 = JSON.parse(readFileSync(as2Path, "utf-8"));
     assert.strictEqual(as2["@context"], "https://www.w3.org/ns/activitystreams");
@@ -76,29 +130,33 @@ describe("runPlugin", () => {
 
     const raw = JSON.parse(readFileSync(rawPath, "utf-8"));
     assert.strictEqual(raw.original, "data");
-
-    const state = JSON.parse(readFileSync(statePath, "utf-8"));
-    assert.strictEqual(state.lastSeen, "2024-03-15T14:30:00.000Z");
   });
 
-  test("passes existing state to plugin", async () => {
-    const stateDir = join(archiveDir, "testplatform");
-    mkdirSync(stateDir, { recursive: true });
-    const statePath = join(stateDir, "state.json");
-    const existingState = { lastSeen: "2024-01-01T00:00:00.000Z" };
-    writeFileSync(statePath, JSON.stringify(existingState));
+  test("passes archivedIds and latestByAuthor from existing archive to plugin", async () => {
+    // Pre-populate archive with an existing post
+    const postsDir = join(archiveDir, "testplatform", "posts", "testuser");
+    mkdirSync(postsDir, { recursive: true });
+    writeFileSync(join(postsDir, "2024-01-01-OLD.as2.json"), JSON.stringify({
+      id: "https://example.com/p/OLD/",
+      published: "2024-01-01T00:00:00.000Z",
+    }));
 
-    let receivedState = null;
+    let receivedArchivedIds = null;
+    let receivedLatestByAuthor = null;
     const fakePlugin = {
       name: "testplatform",
       async run(config, context) {
-        receivedState = context.state;
-        return { posts: [], state: existingState };
+        receivedArchivedIds = context.archivedIds;
+        receivedLatestByAuthor = context.latestByAuthor;
+        return { posts: [] };
       },
     };
 
     await runPlugin(fakePlugin, {}, archiveDir);
-    assert.deepStrictEqual(receivedState, existingState);
+
+    assert.ok(receivedArchivedIds instanceof Set);
+    assert.ok(receivedArchivedIds.has("https://example.com/p/OLD/"));
+    assert.strictEqual(receivedLatestByAuthor.testuser, "2024-01-01T00:00:00.000Z");
   });
 
   test("moves media files from tmpPath to archive", async () => {
@@ -121,7 +179,6 @@ describe("runPlugin", () => {
               media: [{ relativePath: "1.jpg", tmpPath: join(fakeTmpDir, "1.jpg") }],
             },
           ],
-          state: {},
         };
       },
     };
@@ -150,7 +207,6 @@ describe("runPlugin", () => {
               media: [],
             },
           ],
-          state: {},
         };
       },
     };
@@ -181,7 +237,6 @@ describe("runPlugin", () => {
               media: [],
             },
           ],
-          state: {},
         };
       },
     };
@@ -200,7 +255,7 @@ describe("runPlugin", () => {
       name: "testplatform",
       async run(config, context) {
         receivedDataDir = context.dataDir;
-        return { posts: [], state: {} };
+        return { posts: [] };
       },
     };
     await runPlugin(fakePlugin, {}, archiveDir);
@@ -223,7 +278,6 @@ describe("runPlugin", () => {
               media: [],
             },
           ],
-          state: {},
         };
       },
     };

@@ -46,8 +46,7 @@ export default {
   async run(config, context) {
     const sources = config.sources || [];
     const allPosts = [];
-    const state = { ...context.state };
-    const imported = new Set(state.importedIds || []);
+    const imported = context.archivedIds;
 
     for (const source of sources) {
       const sourcePath = expandPath(source.path);
@@ -138,11 +137,9 @@ export default {
         }
 
         allPosts.push({ as2: post.as2, raw: post.raw, media: mediaFiles });
-        imported.add(post.as2.id);
       }
     }
 
-    state.importedIds = [...imported];
-    return { posts: allPosts, state };
+    return { posts: allPosts };
   },
 };

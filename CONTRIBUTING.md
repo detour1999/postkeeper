@@ -60,12 +60,13 @@ export default {
     // Fetch new posts, download media to context.tmpDir, return results.
     // Called via: postkeeper run my-plugin
     //
-    // context.state   - previous state (for tracking what's already archived)
-    // context.tmpDir  - temp directory for media downloads
-    // context.dataDir - plugin-specific persistent data directory
-    // context.log(msg) - log under the plugin's name
+    // context.archivedIds    - Set of AS2 IDs already in the archive
+    // context.latestByAuthor - { authorName: latestPublishedTimestamp }
+    // context.tmpDir         - temp directory for media downloads
+    // context.dataDir        - plugin-specific persistent data directory
+    // context.log(msg)       - log under the plugin's name
     //
-    // Return: { posts: [...], state: { ... } }
+    // Return: { posts: [...] }
     // Each post: { as2, raw, media: [{ relativePath, tmpPath }] }
   },
 };

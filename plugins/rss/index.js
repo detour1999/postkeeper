@@ -59,7 +59,6 @@ export default {
   async run(config, context) {
     const feeds = config.feeds || [];
     const allPosts = [];
-    const state = { ...context.state };
 
     for (const feed of feeds) {
       const feedName = feed.name || feed.url;
@@ -76,8 +75,10 @@ export default {
         const articles = parseFeed(xml, feedName);
         context.log(`Found ${articles.length} article(s)`);
 
-        const lastSeen = state[feed.url] || null;
+        // Filter by archivedIds (exact dedup) and fall back to latestByAuthor (time-based)
         const newArticles = articles.filter((a) => {
+          if (context.archivedIds.has(a.id)) return false;
+          const lastSeen = context.latestByAuthor[feedName] || null;
           if (!lastSeen || !a.published) return true;
           return new Date(a.published) > new Date(lastSeen);
         });
@@ -109,18 +110,11 @@ export default {
           allPosts.push({ as2, raw: { feed_url: feed.url, feed_name: feedName }, media: mediaFiles });
         }
 
-        // Update state with newest article timestamp
-        const newest = newArticles
-          .filter((a) => a.published)
-          .sort((a, b) => new Date(b.published) - new Date(a.published))[0];
-        if (newest) {
-          state[feed.url] = newest.published;
-        }
       } catch (err) {
         context.log(`Error fetching ${feedName}: ${err.message}`);
       }
     }
 
-    return { posts: allPosts, state };
+    return { posts: allPosts };
   },
 };

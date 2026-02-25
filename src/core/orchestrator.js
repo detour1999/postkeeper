@@ -1,23 +1,40 @@
 // src/core/orchestrator.js
-import { mkdirSync, writeFileSync, renameSync, copyFileSync, unlinkSync, existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, renameSync, copyFileSync, unlinkSync, existsSync, readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { validateAS2 } from "./as2.js";
 import { getPluginDataDir } from "./paths.js";
 
-function loadPluginState(archiveDir, pluginName) {
-  const statePath = join(archiveDir, pluginName, "state.json");
-  try {
-    return JSON.parse(readFileSync(statePath, "utf-8"));
-  } catch {
-    return {};
-  }
-}
+export function scanArchive(archiveDir, pluginName) {
+  const archivedIds = new Set();
+  const latestByAuthor = {};
 
-function savePluginState(archiveDir, pluginName, state) {
-  const statePath = join(archiveDir, pluginName, "state.json");
-  mkdirSync(dirname(statePath), { recursive: true });
-  writeFileSync(statePath, JSON.stringify(state, null, 2));
+  const postsDir = join(archiveDir, pluginName, "posts");
+  if (!existsSync(postsDir)) return { archivedIds, latestByAuthor };
+
+  for (const author of readdirSync(postsDir, { withFileTypes: true })) {
+    if (!author.isDirectory()) continue;
+    const authorDir = join(postsDir, author.name);
+
+    for (const file of readdirSync(authorDir)) {
+      if (!file.endsWith(".as2.json")) continue;
+
+      try {
+        const as2 = JSON.parse(readFileSync(join(authorDir, file), "utf-8"));
+        if (as2.id) archivedIds.add(as2.id);
+        if (as2.published) {
+          const current = latestByAuthor[author.name];
+          if (!current || as2.published > current) {
+            latestByAuthor[author.name] = as2.published;
+          }
+        }
+      } catch {
+        // Skip malformed files
+      }
+    }
+  }
+
+  return { archivedIds, latestByAuthor };
 }
 
 function deriveBaseName(as2) {
@@ -38,11 +55,12 @@ function deriveBaseName(as2) {
 }
 
 export async function runPlugin(plugin, pluginConfig, archiveDir) {
-  const state = loadPluginState(archiveDir, plugin.name);
+  const { archivedIds, latestByAuthor } = scanArchive(archiveDir, plugin.name);
   const tmpDir = mkdtempSync(join(tmpdir(), `postkeeper-${plugin.name}-`));
 
   const context = {
-    state,
+    archivedIds,
+    latestByAuthor,
     tmpDir,
     dataDir: getPluginDataDir(plugin.name),
     log: (msg) => console.log(`  [${plugin.name}] ${msg}`),
@@ -86,9 +104,6 @@ export async function runPlugin(plugin, pluginConfig, archiveDir) {
       }
     }
   }
-
-  // Save updated state
-  savePluginState(archiveDir, plugin.name, result.state);
 
   // Clean up temp directory
   rmSync(tmpDir, { recursive: true, force: true });
