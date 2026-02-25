@@ -27,8 +27,12 @@ function deriveBaseName(as2) {
     const segments = url.pathname.split("/").filter(Boolean);
     slug = segments[segments.length - 1];
   } catch {
-    slug = as2.id;
+    // For non-URL IDs like "meta-archive:instagram:12345", use last segment
+    const parts = as2.id.split(":");
+    slug = parts[parts.length - 1];
   }
+  // Sanitize: only keep alphanumeric, hyphens, underscores
+  slug = slug.replace(/[^a-zA-Z0-9_-]/g, "-");
   return `${datePrefix}-${slug}`;
 }
 

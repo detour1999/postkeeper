@@ -154,6 +154,34 @@ describe("runPlugin", () => {
     assert.ok(existsSync(goodPath), "Valid AS2 post should be written");
   });
 
+  test("derives filename from non-URL id with colon separators", async () => {
+    const fakePlugin = {
+      name: "testplatform",
+      async run() {
+        return {
+          posts: [
+            {
+              as2: makeAS2({
+                id: "meta-archive:instagram:18035531567732190",
+                published: "2025-12-26T02:36:17.000Z",
+              }),
+              raw: {},
+              media: [],
+            },
+          ],
+          state: {},
+        };
+      },
+    };
+
+    await runPlugin(fakePlugin, {}, archiveDir);
+
+    // meta-archive: is a valid URL scheme, so pathname is "instagram:18035531567732190"
+    // After sanitization, colons become hyphens
+    const as2Path = join(archiveDir, "testplatform", "posts", "testuser", "2025-12-26-instagram-18035531567732190.as2.json");
+    assert.ok(existsSync(as2Path), "Should sanitize colons in derived filename");
+  });
+
   test("derives filename from AS2 id URL", async () => {
     const fakePlugin = {
       name: "testplatform",
