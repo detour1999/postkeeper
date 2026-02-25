@@ -47,22 +47,17 @@ export default {
     const sources = config.sources || [];
     const allPosts = [];
     const state = { ...context.state };
+    const imported = new Set(state.importedIds || []);
 
     for (const source of sources) {
       const sourcePath = expandPath(source.path);
-      const sourceKey = `${source.platform}:${source.path}`;
-
-      if (state[sourceKey]) {
-        context.log(`Skipping ${source.path} (already imported)`);
-        continue;
-      }
 
       if (!existsSync(sourcePath)) {
         context.log(`Source not found: ${sourcePath}`);
         continue;
       }
 
-      context.log(`Importing ${source.platform} from ${source.path}...`);
+      context.log(`Scanning ${source.platform} from ${source.path}...`);
 
       let baseDir;
       const isZip = extname(sourcePath).toLowerCase() === ".zip";
@@ -113,8 +108,16 @@ export default {
         }
       }
 
+      // Filter out already-imported posts
+      const newPosts = parsedPosts.filter((p) => !imported.has(p.as2.id));
+      if (newPosts.length === 0) {
+        context.log("No new posts.");
+        continue;
+      }
+      context.log(`${newPosts.length} new post(s)`);
+
       // Copy media files to tmpDir
-      for (const post of parsedPosts) {
+      for (const post of newPosts) {
         const mediaFiles = [];
 
         for (const [i, uri] of post.mediaUris.entries()) {
@@ -135,11 +138,11 @@ export default {
         }
 
         allPosts.push({ as2: post.as2, raw: post.raw, media: mediaFiles });
+        imported.add(post.as2.id);
       }
-
-      state[sourceKey] = new Date().toISOString();
     }
 
+    state.importedIds = [...imported];
     return { posts: allPosts, state };
   },
 };
