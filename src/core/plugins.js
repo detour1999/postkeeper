@@ -18,8 +18,8 @@ export async function discoverPlugins(pluginsDir) {
       const mod = await import(pathToFileURL(indexPath).href);
       const plugin = mod.default;
 
-      if (!plugin?.name || typeof plugin.poll !== "function" || typeof plugin.init !== "function") {
-        console.warn(`Skipping plugin "${entry.name}": missing required exports (name, init, poll)`);
+      if (!plugin?.name || typeof plugin.run !== "function" || typeof plugin.init !== "function") {
+        console.warn(`Skipping plugin "${entry.name}": missing required exports (name, init, run)`);
         continue;
       }
 

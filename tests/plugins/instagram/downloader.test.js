@@ -72,6 +72,30 @@ describe("downloadMedia", () => {
     assert.strictEqual(readFileSync(results[0].tmpPath, "utf8"), "fake-image-data-1");
   });
 
+  test("uses provided log function instead of console", async () => {
+    const logs = [];
+    const log = (msg) => logs.push(msg);
+    const mediaItems = [
+      { file: "image1.jpg", url: `${baseUrl}/image1.jpg` },
+    ];
+
+    await downloadMedia(mediaItems, tmpDir, "LOG001", log);
+
+    assert.ok(logs.some((m) => m.includes("image1.jpg")));
+  });
+
+  test("uses provided log function for errors", async () => {
+    const logs = [];
+    const log = (msg) => logs.push(msg);
+    const mediaItems = [
+      { file: "missing.jpg", url: `${baseUrl}/missing.jpg` },
+    ];
+
+    await downloadMedia(mediaItems, tmpDir, "ERR001", log);
+
+    assert.ok(logs.some((m) => m.includes("Failed") || m.includes("404")));
+  });
+
   test("creates shortcode subdirectory in tmpDir", async () => {
     const mediaItems = [
       { file: "image1.jpg", url: `${baseUrl}/image1.jpg` },

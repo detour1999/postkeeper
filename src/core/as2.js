@@ -1,53 +1,27 @@
 // src/core/as2.js
+const AS2_CONTEXT = "https://www.w3.org/ns/activitystreams";
 
-const PLATFORM_USER_URL = {
-  instagram: (username) => `https://www.instagram.com/${username}/`,
-};
-
-function mediaTypeToAS2(type) {
-  if (type === "video") return { type: "Video", mediaType: "video/mp4" };
-  return { type: "Image", mediaType: "image/jpeg" };
-}
-
-export function toAS2(post, pluginName) {
-  const userUrlFn = PLATFORM_USER_URL[pluginName];
-
-  const as2 = {
-    "@context": "https://www.w3.org/ns/activitystreams",
-    type: "Note",
-    id: post.url,
-    url: post.url,
-    published: post.timestamp,
-    attributedTo: {
-      type: "Person",
-      name: post.username,
-      ...(userUrlFn ? { url: userUrlFn(post.username) } : {}),
-    },
-    content: post.caption,
-    attachment: post.media.map((m, i) => {
-      const base = mediaTypeToAS2(m.type);
-      const obj = { ...base, url: m.file };
-      if (i === 0 && post.alt_text) {
-        obj.name = post.alt_text;
-      }
-      return obj;
-    }),
-    tag: (post.tagged_users || []).map((u) => ({
-      type: "Mention",
-      href: userUrlFn ? userUrlFn(u) : undefined,
-      name: `@${u}`,
-    })),
-    likes: { type: "Collection", totalItems: post.likes || 0 },
-    replies: { type: "Collection", totalItems: post.comments || 0 },
-    generator: {
-      type: "Application",
-      name: pluginName.charAt(0).toUpperCase() + pluginName.slice(1),
-    },
-  };
-
-  if (post.location) {
-    as2.location = { type: "Place", name: post.location.name };
+export function validateAS2(obj) {
+  if (!obj || typeof obj !== "object") {
+    return { valid: false, error: "AS2 object is required" };
   }
-
-  return as2;
+  if (obj["@context"] !== AS2_CONTEXT) {
+    return { valid: false, error: `@context must be "${AS2_CONTEXT}"` };
+  }
+  if (typeof obj.type !== "string") {
+    return { valid: false, error: "type must be a string" };
+  }
+  if (typeof obj.id !== "string") {
+    return { valid: false, error: "id must be a string" };
+  }
+  if (typeof obj.published !== "string") {
+    return { valid: false, error: "published must be a string" };
+  }
+  if (!obj.attributedTo || typeof obj.attributedTo !== "object") {
+    return { valid: false, error: "attributedTo must be an object" };
+  }
+  if (typeof obj.attributedTo.name !== "string") {
+    return { valid: false, error: "attributedTo.name must be a string" };
+  }
+  return { valid: true };
 }

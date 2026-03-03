@@ -21,6 +21,8 @@ npx playwright install chromium
 npm link
 ```
 
+Plugin dependencies are installed automatically during `postkeeper init`.
+
 ## Setup
 
 ```bash
@@ -31,30 +33,33 @@ npx playwright install chromium
 ## Quick Start
 
 ```bash
-postkeeper init instagram    # first-time browser login
-postkeeper poll              # poll all configured plugins
-postkeeper poll instagram    # poll a single plugin
+postkeeper init instagram    # creates ~/.config/postkeeper/, first-time browser login
+postkeeper run               # run all configured plugins
+postkeeper run instagram     # run a single plugin
 postkeeper status            # check auth/connectivity
 postkeeper list              # show installed plugins
 ```
 
+Archive data is stored at `~/.local/share/postkeeper/archive/`.
+
 ## Configuration
 
-Edit `config.json` in the project root:
+Config is stored at `~/.config/postkeeper/config.json` (created by `postkeeper init`).
+
+Override directories with environment variables:
+- `POSTKEEPER_CONFIG_DIR` -- config directory (default: `~/.config/postkeeper/`)
+- `POSTKEEPER_DATA_DIR` -- data directory (default: `~/.local/share/postkeeper/`)
 
 ```json
 {
-  "archive_dir": "./archive",
   "plugins": {
     "instagram": {
-      "profiles": ["username1", "username2"],
-      "profile_dir": "./.browser-profile"
+      "profiles": ["username1", "username2"]
     }
   }
 }
 ```
 
-- `archive_dir` -- where archived posts and media are written.
 - `plugins` -- per-plugin configuration. Each key matches a plugin's `name`.
 
 ## Output Format
@@ -109,14 +114,58 @@ The built-in Instagram plugin archives posts from public or followed profiles.
 **Configuration:**
 
 - `profiles` -- list of Instagram usernames to poll.
-- `profile_dir` -- path to the Playwright browser profile directory.
 
 **How it works:**
 
-1. `postkeeper init instagram` opens a real Chromium browser window. Log in manually, then close the window. The session is persisted to `profile_dir`.
-2. `postkeeper poll instagram` launches a headless browser, navigates to each profile, and intercepts Instagram's internal GraphQL API responses to extract structured post data.
+1. `postkeeper init instagram` opens a real Chromium browser window. Log in manually, then close the window. The browser session is persisted to the plugin's data directory.
+2. `postkeeper run instagram` launches a headless browser, navigates to each profile, and intercepts Instagram's internal GraphQL API responses to extract structured post data.
 3. Pagination is driven by scrolling the profile page. On the first run it scrolls through the full history; subsequent runs stop when reaching the last seen post timestamp.
-4. For each new post, the plugin fetches full details (including all carousel items), downloads media, and returns the data to the orchestrator for AS2 conversion and storage.
+4. For each new post, the plugin fetches full details (including all carousel items), downloads media, and returns an AS2 object with raw data for storage.
+
+## RSS/Atom Plugin
+
+Archives posts from RSS and Atom feeds as AS2 Articles.
+
+**Configuration:**
+
+```json
+{
+  "plugins": {
+    "rss": {
+      "feeds": [
+        { "url": "https://example.com/feed.xml", "name": "Example Blog" }
+      ]
+    }
+  }
+}
+```
+
+- `feeds` -- array of feeds to poll. Each has a `url` and optional `name`.
+
+**How it works:** Fetches each feed, parses entries, converts them to AS2 Articles, and downloads any enclosures (podcasts, images). Tracks last-seen entry IDs to avoid re-archiving.
+
+## Meta Archive Plugin
+
+Imports posts from Meta (Facebook/Instagram) data exports.
+
+**Configuration:**
+
+```json
+{
+  "plugins": {
+    "meta-archive": {
+      "sources": [
+        { "path": "~/Downloads/instagram-export", "platform": "instagram" },
+        { "path": "~/Downloads/facebook-export", "platform": "facebook" }
+      ]
+    }
+  }
+}
+```
+
+- `sources` -- array of export directories. Each has a `path` and `platform` (`instagram` or `facebook`).
+
+**How it works:** Reads Meta's JSON and HTML export formats, converts posts to AS2, and copies media into the archive. Handles Meta's UTF-8 encoding bug in JSON exports automatically.
 
 ## Writing Plugins
 
@@ -128,27 +177,32 @@ export default {
   description: "Short description of what it archives",
 
   // First-time setup (e.g. browser login, OAuth flow).
-  async init(config) { /* ... */ },
+  // context provides: context.dataDir, context.log(msg)
+  async init(config, context) { /* ... */ },
 
   // Check if the plugin can connect/authenticate. Return { ok, message }.
-  async status(config) { /* ... */ },
+  // context provides: context.dataDir, context.log(msg)
+  async status(config, context) { /* ... */ },
 
   // Fetch new posts. Return { posts, state }.
-  // Each post in the array: { activity, raw, media }
-  //   activity -- parsed post object (used for AS2 conversion)
-  //   raw      -- original platform data (saved as .raw.json)
-  //   media    -- array of { file, localPath } for downloaded files
-  async poll(config, context) { /* ... */ },
+  // Each post in the array: { as2, raw, media }
+  //   as2   -- complete ActivityStreams 2.0 object
+  //   raw   -- original platform data (saved as .raw.json)
+  //   media -- array of { relativePath, tmpPath } for downloaded files
+  async run(config, context) { /* ... */ },
 
   // Cleanup (e.g. close browser). Optional.
   async shutdown() { /* ... */ },
 };
 ```
 
-The `context` object passed to `poll` provides:
+The `context` object passed to `run` provides:
 - `context.state` -- previous plugin state (for tracking last-seen timestamps).
 - `context.tmpDir` -- temporary directory for downloading media before it is moved to the archive.
+- `context.dataDir` -- plugin-specific persistent data directory.
 - `context.log(msg)` -- log a message under the plugin's name.
+
+Plugins can have their own `package.json` for dependencies. Run `postkeeper init <name>` to install them.
 
 ## Scheduled Polling
 
@@ -169,7 +223,7 @@ Create `~/Library/LaunchAgents/com.postkeeper.poll.plist`:
   <array>
     <string>/usr/local/bin/node</string>
     <string>/path/to/postkeeper/src/cli.js</string>
-    <string>poll</string>
+    <string>run</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/path/to/postkeeper</string>
@@ -201,10 +255,10 @@ crontab -e
 
 Add:
 ```
-0 6 * * * cd /path/to/postkeeper && node src/cli.js poll >> poll.log 2>&1
+0 6 * * * cd /path/to/postkeeper && node src/cli.js run >> poll.log 2>&1
 ```
 
-This polls daily at 6 AM. Adjust the schedule as needed.
+This runs daily at 6 AM. Adjust the schedule as needed.
 
 ## Limitations
 

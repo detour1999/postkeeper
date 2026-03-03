@@ -1,0 +1,42 @@
+[
+  {
+    "timestamp": 1766716583,
+    "attachments": [
+      {
+        "data": [
+          {
+            "media": {
+              "uri": "your_facebook_activity/posts/media/Photos_123/photo1.jpg",
+              "creation_timestamp": 1766716583
+            }
+          },
+          {
+            "media": {
+              "uri": "your_facebook_activity/posts/media/Photos_123/photo2.jpg",
+              "creation_timestamp": 1766716583
+            }
+          }
+        ]
+      }
+    ],
+    "data": [
+      {
+        "post": "One last post from my road trip.\nSome stats: great."
+      },
+      {
+        "update_timestamp": 1766716583
+      }
+    ],
+    "title": "Dylan Richard shared a photo."
+  },
+  {
+    "timestamp": 1311650602,
+    "attachments": [],
+    "data": [
+      {
+        "post": "HOT DOG!"
+      }
+    ],
+    "title": "Dylan Richard shared a photo."
+  }
+]

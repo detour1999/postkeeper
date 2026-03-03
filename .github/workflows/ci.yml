@@ -19,5 +19,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
+      - name: Install plugin dependencies
+        run: |
+          for dir in plugins/*/; do
+            if [ -f "$dir/package.json" ]; then
+              echo "Installing deps for $dir"
+              npm install --prefix "$dir"
+            fi
+          done
       - run: npm test
       - run: npm run test:coverage

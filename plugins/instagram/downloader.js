@@ -3,7 +3,7 @@ import { mkdirSync, createWriteStream } from "node:fs";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 
-export async function downloadMedia(mediaItems, tmpDir, shortcode) {
+export async function downloadMedia(mediaItems, tmpDir, shortcode, log = console.log) {
   const mediaFiles = [];
   const downloadDir = join(tmpDir, shortcode);
   mkdirSync(downloadDir, { recursive: true });
@@ -12,12 +12,12 @@ export async function downloadMedia(mediaItems, tmpDir, shortcode) {
     const filePath = join(downloadDir, item.file);
     const response = await fetch(item.url);
     if (!response.ok) {
-      console.error(`  Failed to download ${item.url}: ${response.status}`);
+      log(`  Failed to download ${item.url}: ${response.status}`);
       continue;
     }
     const fileStream = createWriteStream(filePath);
     await pipeline(response.body, fileStream);
-    console.log(`  Downloaded: ${item.file}`);
+    log(`  Downloaded: ${item.file}`);
 
     mediaFiles.push({
       relativePath: item.file,

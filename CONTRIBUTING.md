@@ -8,7 +8,7 @@ Postkeeper is a personal archiving tool. This guide covers the philosophy, plugi
 
 - **Local-first.** No servers, no cloud, no accounts. Just files on disk.
 - **Use your own login.** Plugins authenticate as you, using your real browser session, API keys, or OAuth tokens. We never impersonate, scrape anonymously, or use leaked credentials.
-- **Fat plugins, thin core.** The core handles orchestration, storage layout, and state. Plugins own everything platform-specific: auth, fetching, pagination, media downloading, error handling.
+- **Fat plugins, thin core.** The core handles orchestration, storage layout, and state. Plugins own everything platform-specific: auth, fetching, pagination, media downloading, AS2 conversion, error handling.
 - **YAGNI.** Don't build for hypothetical future requirements. Three similar lines of code is better than a premature abstraction.
 - **DRY within a plugin.** Share code within a plugin freely. Share code between plugins only when the duplication is painful and the abstraction is obvious.
 
@@ -36,6 +36,7 @@ Each plugin is a directory under `plugins/` with an `index.js` default export:
 plugins/
   my-plugin/
     index.js          # required: plugin interface
+    package.json      # optional: plugin-specific dependencies
     extractor.js      # optional: parsing logic
     downloader.js     # optional: media fetching
 ```
@@ -47,21 +48,26 @@ export default {
   name: "my-plugin",
   description: "Archives posts from My Platform",
 
-  async init(config) {
+  async init(config, context) {
     // First-time setup: browser login, OAuth flow, config validation.
     // Called via: postkeeper init my-plugin
+    //
+    // context.dataDir - plugin-specific persistent data directory
+    // context.log(msg) - log under plugin name
   },
 
-  async poll(config, context) {
+  async run(config, context) {
     // Fetch new posts, download media to context.tmpDir, return results.
-    // Called via: postkeeper poll my-plugin
+    // Called via: postkeeper run my-plugin
     //
-    // context.state  - previous state (for tracking what's already archived)
-    // context.tmpDir - temp directory for media downloads
-    // context.log(msg) - log under the plugin's name
+    // context.archivedIds    - Set of AS2 IDs already in the archive
+    // context.latestByAuthor - { authorName: latestPublishedTimestamp }
+    // context.tmpDir         - temp directory for media downloads
+    // context.dataDir        - plugin-specific persistent data directory
+    // context.log(msg)       - log under the plugin's name
     //
-    // Return: { posts: [...], state: { ... } }
-    // Each post: { activity, raw, media: [{ relativePath, tmpPath }] }
+    // Return: { posts: [...] }
+    // Each post: { as2, raw, media: [{ relativePath, tmpPath }] }
   },
 };
 ```
@@ -70,8 +76,9 @@ export default {
 
 ```js
   // Check auth/connectivity. Return { ok: boolean, message: string }.
-  // Called automatically before poll (pre-flight) and via: postkeeper status
-  async status(config) { ... },
+  // Called automatically before run (pre-flight) and via: postkeeper status
+  async status(config, context) { ... },
+  // context provides: context.dataDir, context.log(msg)
 
   // Cleanup (close browser contexts, connections, etc.)
   async shutdown() { ... },
@@ -81,28 +88,30 @@ export default {
 
 Each plugin gets its own section in `config.json` under `plugins.<name>`. Define whatever config shape makes sense for the platform. Document it in the plugin's section of the README.
 
-### The `activity` Object
+### Plugin Dependencies
 
-The `activity` object returned in each post is converted to ActivityStreams 2.0 by the core. It should include:
+Plugins can have their own `package.json` for platform-specific dependencies. These are installed automatically when the user runs `postkeeper init <name>`. Prefer Node built-ins when possible.
 
-- `shortcode` - unique post identifier from the platform
-- `timestamp` - ISO 8601 timestamp
-- `username` - author's handle
-- `caption` - post text/content
-- `media` - array of `{ file, media_type }` where media_type is 1 (image), 2 (video), or 8 (carousel)
-- `tagged_users` - array of usernames (optional)
-- `location` - `{ name }` (optional)
-- `alt_text` - accessibility text (optional)
-- `like_count`, `comment_count` - engagement numbers (optional)
+### The `as2` Object
 
-Look at `plugins/instagram/extractor.js` for a working example.
+Each post returned by `run` must include an `as2` property containing a complete [ActivityStreams 2.0](https://www.w3.org/TR/activitystreams-core/) object. The core validates this object (checking for required fields like `@context`, `type`, and `published`) but does not transform it -- plugins are responsible for producing the final AS2 representation.
+
+The `as2` object should include at minimum:
+
+- `@context` - `"https://www.w3.org/ns/activitystreams"`
+- `type` - e.g. `"Note"`, `"Article"`
+- `published` - ISO 8601 timestamp
+- `attributedTo` - author info
+- `content` - post text/content
+
+Look at `plugins/instagram/as2.js` or `plugins/rss/index.js` for working examples.
 
 ### Media Downloads
 
 Plugins download media to `context.tmpDir` and return file mappings. The core moves files to the final archive location. This keeps plugins simple and lets the core handle the directory structure.
 
 ```js
-// In your poll function:
+// In your run function:
 const tmpPath = join(context.tmpDir, "1.jpg");
 await downloadFile(url, tmpPath);
 media.push({ relativePath: "1.jpg", tmpPath });
@@ -122,7 +131,7 @@ node --test tests/path.js   # run a specific test file
 - Tests go in `tests/` mirroring the source structure (`tests/core/`, `tests/plugins/instagram/`)
 - Use temp directories with `beforeEach`/`afterEach` cleanup
 - Test pure functions directly. Don't mock what you can construct.
-- Plugin integration tests (requiring real auth or network) are manual -- use `postkeeper poll` directly
+- Plugin integration tests (requiring real auth or network) are manual -- use `postkeeper run` directly
 
 ## Pre-commit Hooks
 
@@ -182,7 +191,8 @@ If you're an AI agent working on this codebase:
 ### Adding a New Plugin
 
 1. Create `plugins/<name>/index.js` implementing the required interface
-2. Add a config section to the README under a new heading
-3. Add tests in `tests/plugins/<name>/`
-4. Test with `postkeeper init <name>` and `postkeeper poll <name>`
-5. Commit the whole plugin as a single logical change
+2. Add `plugins/<name>/package.json` if the plugin needs dependencies
+3. Add a config section to the README under a new heading
+4. Add tests in `tests/plugins/<name>/`
+5. Test with `postkeeper init <name>` and `postkeeper run <name>`
+6. Commit the whole plugin as a single logical change

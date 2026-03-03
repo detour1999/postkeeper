@@ -1,9 +1,0 @@
-{
-  "archive_dir": "./archive",
-  "plugins": {
-    "instagram": {
-      "profiles": [],
-      "profile_dir": "./.browser-profile"
-    }
-  }
-}

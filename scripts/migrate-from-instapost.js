@@ -10,7 +10,7 @@
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
-import { toAS2 } from "../src/core/as2.js";
+import { toAS2 } from "../plugins/instagram/as2.js";
 
 const dryRun = process.argv.includes("--dry-run");
 const sourceDir = "output/posts";
@@ -68,10 +68,3 @@ for (const username of usernames) {
 }
 
 console.log(`\n${dryRun ? "Would migrate" : "Migrated"} ${totalPosts} total post(s).`);
-
-// Migrate state
-if (existsSync("output/state.json") && !dryRun) {
-  mkdirSync("archive/instagram", { recursive: true });
-  cpSync("output/state.json", "archive/instagram/state.json");
-  console.log("Migrated state.json");
-}

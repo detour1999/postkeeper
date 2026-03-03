@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 // src/cli.js
 import { Command } from "commander";
-import { resolve, join } from "node:path";
-import { loadConfig } from "./config.js";
+import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join, dirname } from "node:path";
+import { loadConfig, initConfigDir } from "./config.js";
 import { discoverPlugins } from "./core/plugins.js";
-import { runPoll } from "./core/orchestrator.js";
+import { runPlugin } from "./core/orchestrator.js";
+import { getConfigPath, getArchiveDir, getPluginDataDir } from "./core/paths.js";
+
+const PROJECT_ROOT = dirname(import.meta.dirname);
+const PLUGINS_DIR = join(PROJECT_ROOT, "plugins");
 
 const program = new Command();
 
@@ -17,7 +23,7 @@ program
   .command("list")
   .description("List installed plugins")
   .action(async () => {
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     if (plugins.length === 0) {
       console.log("No plugins found in plugins/");
       return;
@@ -28,25 +34,47 @@ program
   });
 
 program
-  .command("init <plugin>")
+  .command("init [plugin]")
   .description("Run first-time setup for a plugin")
   .action(async (pluginName) => {
-    const config = loadConfig("config.json");
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const { created, configDir } = initConfigDir();
+    if (created) {
+      console.log(`Created config directory: ${configDir}`);
+    } else {
+      console.log(`Config directory already exists: ${configDir}`);
+    }
+
+    if (!pluginName) {
+      return;
+    }
+
+    const config = loadConfig(getConfigPath());
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     const plugin = plugins.find((p) => p.name === pluginName);
     if (!plugin) {
       console.error(`Plugin "${pluginName}" not found. Run "postkeeper list" to see available plugins.`);
       process.exit(1);
     }
-    await plugin.init(config.plugins[pluginName] || {});
+    const pluginDir = join(PLUGINS_DIR, pluginName);
+    const pluginPkgJson = join(pluginDir, "package.json");
+    if (existsSync(pluginPkgJson)) {
+      console.log(`Installing dependencies for ${pluginName}...`);
+      execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
+    }
+    const pluginConfig = config.plugins[pluginName] || {};
+    const context = {
+      dataDir: getPluginDataDir(pluginName),
+      log: (msg) => console.log(`  [${pluginName}] ${msg}`),
+    };
+    await plugin.init(pluginConfig, context);
   });
 
 program
   .command("status [plugin]")
   .description("Check plugin connectivity/auth status")
   .action(async (pluginName) => {
-    const config = loadConfig("config.json");
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const config = loadConfig(getConfigPath());
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     const targets = pluginName ? plugins.filter((p) => p.name === pluginName) : plugins;
 
     if (targets.length === 0) {
@@ -60,7 +88,12 @@ program
         continue;
       }
       try {
-        const result = await plugin.status(config.plugins[plugin.name] || {});
+        const pluginConfig = config.plugins[plugin.name] || {};
+        const context = {
+          dataDir: getPluginDataDir(plugin.name),
+          log: (msg) => console.log(`  [${plugin.name}] ${msg}`),
+        };
+        const result = await plugin.status(pluginConfig, context);
         console.log(`  ${plugin.name}: ${result.ok ? "OK" : "ERROR"} - ${result.message}`);
       } catch (err) {
         console.log(`  ${plugin.name}: ERROR - ${err.message}`);
@@ -69,12 +102,12 @@ program
   });
 
 program
-  .command("poll [plugin]")
-  .description("Poll for new posts")
+  .command("run [plugin]")
+  .description("Run plugins to fetch/import posts")
   .action(async (pluginName) => {
-    const config = loadConfig("config.json");
-    const archiveDir = resolve(config.archive_dir);
-    const plugins = await discoverPlugins(resolve("plugins"));
+    const config = loadConfig(getConfigPath());
+    const archiveDir = getArchiveDir();
+    const plugins = await discoverPlugins(PLUGINS_DIR);
     const targets = pluginName ? plugins.filter((p) => p.name === pluginName) : plugins;
 
     if (targets.length === 0) {
@@ -83,12 +116,17 @@ program
     }
 
     for (const plugin of targets) {
-      console.log(`\nPolling ${plugin.name}...`);
+      console.log(`\nRunning ${plugin.name}...`);
 
       // Pre-flight status check
       if (typeof plugin.status === "function") {
         try {
-          const status = await plugin.status(config.plugins[plugin.name] || {});
+          const pluginConfig = config.plugins[plugin.name] || {};
+          const context = {
+            dataDir: getPluginDataDir(plugin.name),
+            log: (msg) => console.log(`  [${plugin.name}] ${msg}`),
+          };
+          const status = await plugin.status(pluginConfig, context);
           if (!status.ok) {
             console.error(`  Skipping ${plugin.name}: ${status.message}`);
             continue;
@@ -100,10 +138,10 @@ program
       }
 
       try {
-        await runPoll(plugin, config.plugins[plugin.name] || {}, archiveDir);
+        await runPlugin(plugin, config.plugins[plugin.name] || {}, archiveDir);
         console.log(`  ${plugin.name} done.`);
       } catch (err) {
-        console.error(`  Error polling ${plugin.name}: ${err.message}`);
+        console.error(`  Error running ${plugin.name}: ${err.message}`);
       }
 
       // Shutdown if supported
