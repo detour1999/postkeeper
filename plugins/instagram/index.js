@@ -66,7 +66,7 @@ export default {
     const profiles = config.profiles || [];
     if (profiles.length === 0) {
       context.log("No profiles configured.");
-      return { posts: [], state: context.state };
+      return { posts: [] };
     }
 
     const profileDir = join(context.dataDir, "browser-profile");

@@ -68,10 +68,3 @@ for (const username of usernames) {
 }
 
 console.log(`\n${dryRun ? "Would migrate" : "Migrated"} ${totalPosts} total post(s).`);
-
-// Migrate state
-if (existsSync("output/state.json") && !dryRun) {
-  mkdirSync("archive/instagram", { recursive: true });
-  cpSync("output/state.json", "archive/instagram/state.json");
-  console.log("Migrated state.json");
-}
