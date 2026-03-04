@@ -130,6 +130,7 @@ export async function fetchProfilePosts(
   page,
   profileUrl,
   lastSeenTimestamp = null,
+  log = () => {},
 ) {
   const posts = [];
   const seenIds = new Set();
@@ -142,12 +143,16 @@ export async function fetchProfilePosts(
 
     try {
       const text = await response.text();
+      log(`GraphQL response: ${text.length} bytes`);
       // Facebook sends newline-delimited JSON
       const lines = text.split("\n").filter(Boolean);
       for (const line of lines) {
         try {
           const json = JSON.parse(line);
           const stories = findStoryNodes(json);
+          if (stories.length > 0) {
+            log(`Found ${stories.length} Story node(s) in response`);
+          }
           for (const story of stories) {
             if (story.post_id && !seenIds.has(String(story.post_id))) {
               seenIds.add(String(story.post_id));
@@ -156,6 +161,7 @@ export async function fetchProfilePosts(
               if (flat.permalink_url) {
                 posts.push(flat);
                 batchReceived = true;
+                log(`  Post ${flat.post_id}: ${flat.message_text?.slice(0, 60) || "(no text)"}...`);
               }
             }
           }

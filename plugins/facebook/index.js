@@ -91,7 +91,7 @@ export default {
 
         try {
           const lastSeen = context.latestByAuthor[profileName] || null;
-          const postNodes = await fetchProfilePosts(page, profileUrl, lastSeen);
+          const postNodes = await fetchProfilePosts(page, profileUrl, lastSeen, context.log);
           context.log(`Found ${postNodes.length} post(s)`);
 
           const newPosts = postNodes
