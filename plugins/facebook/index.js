@@ -4,6 +4,7 @@ import { chromium } from "playwright";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { fetchProfilePosts, parsePost } from "./extractor.js";
+// fetchProfilePosts returns flattened story nodes (via flattenStory internally)
 import { downloadMedia } from "./downloader.js";
 import { toAS2 } from "./as2.js";
 

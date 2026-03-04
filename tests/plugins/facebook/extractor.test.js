@@ -1,19 +1,172 @@
-// ABOUTME: Tests for Facebook post parser that converts GraphQL nodes to clean post format.
+// ABOUTME: Tests for Facebook extractor — flattenStory and parsePost.
 // ABOUTME: Covers text, photo, video, shared link, check-in, and edge cases.
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parsePost } from "../../../plugins/facebook/extractor.js";
+import { flattenStory, parsePost } from "../../../plugins/facebook/extractor.js";
+
+function makeStory(overrides = {}) {
+  return {
+    __typename: "Story",
+    post_id: "pfbid02abc",
+    permalink_url: "https://www.facebook.com/dylanr/posts/pfbid02abc",
+    actors: [{ name: "Dylan Richard", url: "https://www.facebook.com/dylanr", __typename: "User" }],
+    attachments: [],
+    place: null,
+    comet_sections: {
+      timestamp: { story: { creation_time: 1710510600 } },
+      content: {
+        story: {
+          comet_sections: {
+            message: {
+              story: {
+                message: { text: "Hello world" },
+              },
+            },
+          },
+        },
+      },
+      feedback: null,
+      context_layout: null,
+    },
+    feedback: null,
+    ...overrides,
+  };
+}
+
+describe("Facebook flattenStory", () => {
+  test("flattens a basic story", () => {
+    const flat = flattenStory(makeStory());
+    assert.strictEqual(flat.post_id, "pfbid02abc");
+    assert.strictEqual(flat.creation_time, 1710510600);
+    assert.strictEqual(flat.message_text, "Hello world");
+    assert.strictEqual(flat.media.length, 0);
+    assert.strictEqual(flat.shared_link, null);
+    assert.strictEqual(flat.place, null);
+    assert.strictEqual(flat.reactions, 0);
+    assert.strictEqual(flat.comments, 0);
+  });
+
+  test("extracts photo subattachments", () => {
+    const story = makeStory({
+      attachments: [{
+        media: { __typename: "Photo", id: "123" },
+        styles: {
+          attachment: {
+            all_subattachments: {
+              count: 2,
+              nodes: [
+                { media: { __typename: "Photo", is_playable: false, image: { uri: "https://cdn.fbcdn.net/img1.jpg" } } },
+                { media: { __typename: "Photo", is_playable: false, image: { uri: "https://cdn.fbcdn.net/img2.jpg" } } },
+              ],
+            },
+          },
+        },
+      }],
+    });
+    const flat = flattenStory(story);
+    assert.strictEqual(flat.media.length, 2);
+    assert.strictEqual(flat.media[0].__typename, "Photo");
+    assert.strictEqual(flat.media[0].image.uri, "https://cdn.fbcdn.net/img1.jpg");
+  });
+
+  test("extracts video attachment", () => {
+    const story = makeStory({
+      attachments: [{
+        media: { __typename: "Video", id: "456" },
+        styles: {
+          attachment: {
+            all_subattachments: {
+              count: 1,
+              nodes: [
+                { media: { __typename: "Video", is_playable: true, playable_url: "https://cdn.fbcdn.net/vid.mp4" } },
+              ],
+            },
+          },
+        },
+      }],
+    });
+    const flat = flattenStory(story);
+    assert.strictEqual(flat.media.length, 1);
+    assert.strictEqual(flat.media[0].__typename, "Video");
+    assert.strictEqual(flat.media[0].playable_url, "https://cdn.fbcdn.net/vid.mp4");
+  });
+
+  test("extracts reaction and comment counts from feedback section", () => {
+    const feedbackSection = {
+      story: {
+        story_ufi_container: {
+          story: {
+            feedback_context: {
+              feedback_target_with_context: {
+                ufi_renderer: {
+                  feedback: {
+                    reaction_count: { count: 42 },
+                    share_count: { count: 1 },
+                    comment_rendering_instance: { comments: { total_count: 7 } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const story = makeStory({
+      comet_sections: {
+        ...makeStory().comet_sections,
+        feedback: feedbackSection,
+      },
+    });
+    const flat = flattenStory(story);
+    assert.strictEqual(flat.reactions, 42);
+    assert.strictEqual(flat.comments, 7);
+  });
+
+  test("extracts place from story", () => {
+    const story = makeStory({ place: { name: "Portland, Oregon" } });
+    const flat = flattenStory(story);
+    assert.deepStrictEqual(flat.place, { name: "Portland, Oregon" });
+  });
+
+  test("handles missing message gracefully", () => {
+    const story = makeStory({
+      comet_sections: {
+        ...makeStory().comet_sections,
+        content: { story: { comet_sections: { message: null } } },
+      },
+    });
+    const flat = flattenStory(story);
+    assert.strictEqual(flat.message_text, "");
+  });
+
+  test("extracts shared link from attachment target", () => {
+    const story = makeStory({
+      attachments: [{
+        styles: {
+          attachment: {
+            target: { url: "https://example.com/article", title: "Cool Article" },
+          },
+        },
+      }],
+    });
+    const flat = flattenStory(story);
+    assert.deepStrictEqual(flat.shared_link, { url: "https://example.com/article", title: "Cool Article" });
+  });
+});
 
 describe("Facebook parsePost", () => {
-  test("parses a text-only post", () => {
+  test("converts a flattened node to post format", () => {
     const node = {
       post_id: "pfbid02abc",
+      permalink_url: "https://www.facebook.com/dylanr/posts/pfbid02abc",
       creation_time: 1710510600,
-      message: { text: "Hello world" },
-      feedback: { reaction_count: { count: 42 }, comment_count: { total_count: 3 } },
-      attached_media: [],
-      attached_link: null,
+      message_text: "Hello world",
+      media: [],
+      shared_link: null,
       place: null,
+      reactions: 42,
+      comments: 3,
+      actors: [{ name: "Dylan Richard" }],
     };
     const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
     assert.strictEqual(post.postId, "pfbid02abc");
@@ -26,18 +179,19 @@ describe("Facebook parsePost", () => {
     assert.strictEqual(post.location, null);
   });
 
-  test("parses a photo post", () => {
+  test("converts photo media to image entries", () => {
     const node = {
       post_id: "pfbid02photo",
       creation_time: 1710510600,
-      message: { text: "Photo!" },
-      feedback: { reaction_count: { count: 5 }, comment_count: { total_count: 0 } },
-      attached_media: [
-        { media: { image: { uri: "https://cdn.fbcdn.net/img1.jpg" }, __typename: "Photo" } },
-        { media: { image: { uri: "https://cdn.fbcdn.net/img2.jpg" }, __typename: "Photo" } },
+      message_text: "Photos!",
+      media: [
+        { __typename: "Photo", image: { uri: "https://cdn.fbcdn.net/img1.jpg" } },
+        { __typename: "Photo", image: { uri: "https://cdn.fbcdn.net/img2.jpg" } },
       ],
-      attached_link: null,
+      shared_link: null,
       place: null,
+      reactions: 0,
+      comments: 0,
     };
     const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
     assert.strictEqual(post.media.length, 2);
@@ -47,17 +201,18 @@ describe("Facebook parsePost", () => {
     assert.strictEqual(post.media[1].file, "2.jpg");
   });
 
-  test("parses a video post", () => {
+  test("converts video media to video entries", () => {
     const node = {
       post_id: "pfbid02vid",
       creation_time: 1710510600,
-      message: { text: "Video!" },
-      feedback: { reaction_count: { count: 0 }, comment_count: { total_count: 0 } },
-      attached_media: [
-        { media: { playable_url: "https://cdn.fbcdn.net/vid.mp4", __typename: "Video" } },
+      message_text: "Video!",
+      media: [
+        { __typename: "Video", is_playable: true, playable_url: "https://cdn.fbcdn.net/vid.mp4" },
       ],
-      attached_link: null,
+      shared_link: null,
       place: null,
+      reactions: 0,
+      comments: 0,
     };
     const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
     assert.strictEqual(post.media.length, 1);
@@ -66,59 +221,36 @@ describe("Facebook parsePost", () => {
     assert.strictEqual(post.media[0].file, "1.mp4");
   });
 
-  test("parses a shared link", () => {
+  test("passes through shared link and location", () => {
     const node = {
-      post_id: "pfbid02link",
+      post_id: "pfbid02combo",
       creation_time: 1710510600,
-      message: { text: "Check this out" },
-      feedback: { reaction_count: { count: 0 }, comment_count: { total_count: 0 } },
-      attached_media: [],
-      attached_link: { url: "https://example.com/article", title: "Cool Article" },
-      place: null,
-    };
-    const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
-    assert.deepStrictEqual(post.sharedLink, { url: "https://example.com/article", title: "Cool Article" });
-  });
-
-  test("parses a check-in post", () => {
-    const node = {
-      post_id: "pfbid02loc",
-      creation_time: 1710510600,
-      message: { text: "At a place" },
-      feedback: { reaction_count: { count: 0 }, comment_count: { total_count: 0 } },
-      attached_media: [],
-      attached_link: null,
+      message_text: "At a place",
+      media: [],
+      shared_link: { url: "https://example.com", title: "Example" },
       place: { name: "Portland, Oregon" },
+      reactions: 5,
+      comments: 1,
     };
     const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
+    assert.deepStrictEqual(post.sharedLink, { url: "https://example.com", title: "Example" });
     assert.deepStrictEqual(post.location, { name: "Portland, Oregon" });
   });
 
-  test("handles missing message gracefully", () => {
+  test("handles missing fields gracefully", () => {
     const node = {
-      post_id: "pfbid02nomsg",
-      creation_time: 1710510600,
-      message: null,
-      feedback: { reaction_count: { count: 0 }, comment_count: { total_count: 0 } },
-      attached_media: [],
-      attached_link: null,
+      post_id: "pfbid02empty",
+      creation_time: null,
+      message_text: "",
+      media: [],
+      shared_link: null,
       place: null,
+      reactions: 0,
+      comments: 0,
     };
     const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
     assert.strictEqual(post.content, "");
-  });
-
-  test("handles missing feedback gracefully", () => {
-    const node = {
-      post_id: "pfbid02nofb",
-      creation_time: 1710510600,
-      message: { text: "Hi" },
-      feedback: null,
-      attached_media: [],
-      attached_link: null,
-      place: null,
-    };
-    const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
+    assert.strictEqual(post.timestamp, null);
     assert.strictEqual(post.reactions, 0);
     assert.strictEqual(post.comments, 0);
   });

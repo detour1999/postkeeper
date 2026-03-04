@@ -1,28 +1,108 @@
 // ABOUTME: Extracts and parses Facebook post data from GraphQL API responses.
-// ABOUTME: Handles profile scrolling, post detail fetching, and raw node parsing.
+// ABOUTME: Handles profile scrolling, Story node flattening, and raw node parsing.
 
 /**
- * Parse a raw Facebook GraphQL post node into our clean post format.
- * The exact field names may need adjustment after inspecting real GraphQL responses.
+ * Flatten a Facebook Story GraphQL object into a normalized node for parsePost.
+ * Facebook nests data deeply in comet_sections — this pulls it all to the top level.
+ */
+export function flattenStory(story) {
+  const creationTime =
+    story.comet_sections?.timestamp?.story?.creation_time ?? null;
+
+  // Message text is deeply nested in comet_sections.content
+  const messageText =
+    story.comet_sections?.content?.story?.comet_sections?.message?.story
+      ?.message?.text || "";
+
+  // Attachments: extract subattachments (photos/videos) from styles
+  const rawAttachments = story.attachments || [];
+  const media = [];
+  for (const att of rawAttachments) {
+    const subs = att?.styles?.attachment?.all_subattachments?.nodes;
+    if (subs) {
+      for (const sub of subs) {
+        const m = sub.media;
+        if (!m) continue;
+        media.push(m);
+      }
+    } else if (att?.media) {
+      // Single attachment without subattachments
+      media.push(att.media);
+    }
+  }
+
+  // Shared link: look for target on attachment
+  let sharedLink = null;
+  for (const att of rawAttachments) {
+    const target = att?.styles?.attachment?.target;
+    if (target?.url) {
+      sharedLink = { url: target.url, title: target.title || "" };
+      break;
+    }
+  }
+
+  // Reaction and comment counts from feedback section
+  let reactions = 0;
+  let comments = 0;
+  const feedbackSection = story.comet_sections?.feedback;
+  if (feedbackSection) {
+    const fbStr = JSON.stringify(feedbackSection);
+    const reactionMatch = fbStr.match(/"reaction_count":\{"count":(\d+)/);
+    if (reactionMatch) reactions = parseInt(reactionMatch[1], 10);
+    const commentMatch = fbStr.match(
+      /"comment_rendering_instance":\{"comments":\{"total_count":(\d+)\}/,
+    );
+    if (commentMatch) comments = parseInt(commentMatch[1], 10);
+  }
+
+  // Location: check for place in story_to_place or context_layout
+  let place = null;
+  if (story.place) {
+    place = { name: story.place.name };
+  }
+
+  return {
+    post_id: story.post_id,
+    permalink_url: story.permalink_url,
+    creation_time: creationTime,
+    message_text: messageText,
+    media,
+    shared_link: sharedLink,
+    reactions,
+    comments,
+    place,
+    actors: story.actors || [],
+  };
+}
+
+/**
+ * Parse a flattened Facebook post node into our clean post format.
  */
 export function parsePost(node, profileUrl, profileName) {
-  const content = node.message?.text || "";
-  const timestamp = new Date(node.creation_time * 1000).toISOString();
-
-  const media = (node.attached_media || []).map((item, i) => {
-    const m = item.media || item;
-    const isVideo = m.__typename === "Video" || m.playable_url;
-    if (isVideo) {
-      return { type: "video", url: m.playable_url, file: `${i + 1}.mp4` };
-    }
-    return { type: "image", url: m.image?.uri || m.uri, file: `${i + 1}.jpg` };
-  });
-
-  const sharedLink = node.attached_link
-    ? { url: node.attached_link.url, title: node.attached_link.title || "" }
+  const content = node.message_text || "";
+  const timestamp = node.creation_time
+    ? new Date(node.creation_time * 1000).toISOString()
     : null;
 
-  const location = node.place ? { name: node.place.name } : null;
+  const media = (node.media || []).map((m, i) => {
+    const isVideo =
+      m.__typename === "Video" || m.is_playable === true || m.playable_url;
+    if (isVideo) {
+      return {
+        type: "video",
+        url: m.playable_url || m.browser_native_sd_url || "",
+        file: `${i + 1}.mp4`,
+      };
+    }
+    return {
+      type: "image",
+      url: m.image?.uri || m.uri || "",
+      file: `${i + 1}.jpg`,
+    };
+  });
+
+  const sharedLink = node.shared_link || null;
+  const location = node.place || null;
 
   return {
     postId: node.post_id,
@@ -31,8 +111,8 @@ export function parsePost(node, profileUrl, profileName) {
     timestamp,
     content,
     location,
-    reactions: node.feedback?.reaction_count?.count || 0,
-    comments: node.feedback?.comment_count?.total_count || 0,
+    reactions: node.reactions || 0,
+    comments: node.comments || 0,
     media,
     sharedLink,
   };
@@ -42,13 +122,17 @@ export function parsePost(node, profileUrl, profileName) {
  * Fetch posts from a Facebook profile by intercepting GraphQL responses.
  * Scrolls until we find posts older than lastSeenTimestamp, or no more pages.
  *
- * NOTE: The GraphQL response format needs to be discovered by intercepting
- * real responses. The field names and nesting may differ from what's assumed here.
- * This function will likely need adjustment after initial testing with real data.
+ * Intercepts GraphQL responses, finds Story objects, flattens them into
+ * normalized nodes, and returns them for processing.
  */
 /* c8 ignore start -- requires Playwright browser page, tested manually */
-export async function fetchProfilePosts(page, profileUrl, lastSeenTimestamp = null) {
+export async function fetchProfilePosts(
+  page,
+  profileUrl,
+  lastSeenTimestamp = null,
+) {
   const posts = [];
+  const seenIds = new Set();
   let batchReceived = false;
   let noNewBatches = 0;
 
@@ -57,17 +141,26 @@ export async function fetchProfilePosts(page, profileUrl, lastSeenTimestamp = nu
     if (!url.includes("/api/graphql") && !url.includes("/graphql/")) return;
 
     try {
-      const json = await response.json();
-      const str = JSON.stringify(json);
-      // Look for timeline post nodes — exact key TBD from real responses
-      if (str.includes("creation_time") && str.includes("post_id")) {
-        // Walk the response tree to find post nodes
-        const found = findPostNodes(json);
-        for (const node of found) {
-          if (node.post_id && !posts.some((p) => p.post_id === node.post_id)) {
-            posts.push(node);
-            batchReceived = true;
+      const text = await response.text();
+      // Facebook sends newline-delimited JSON
+      const lines = text.split("\n").filter(Boolean);
+      for (const line of lines) {
+        try {
+          const json = JSON.parse(line);
+          const stories = findStoryNodes(json);
+          for (const story of stories) {
+            if (story.post_id && !seenIds.has(String(story.post_id))) {
+              seenIds.add(String(story.post_id));
+              const flat = flattenStory(story);
+              // Skip stories without a permalink (aggregated/suggested content)
+              if (flat.permalink_url) {
+                posts.push(flat);
+                batchReceived = true;
+              }
+            }
           }
+        } catch {
+          // Not valid JSON line
         }
       }
     } catch {
@@ -85,8 +178,10 @@ export async function fetchProfilePosts(page, profileUrl, lastSeenTimestamp = nu
     while (noNewBatches < 3) {
       if (lastSeenTimestamp) {
         const oldestPost = posts[posts.length - 1];
-        if (oldestPost) {
-          const oldestTs = new Date(oldestPost.creation_time * 1000).toISOString();
+        if (oldestPost && oldestPost.creation_time) {
+          const oldestTs = new Date(
+            oldestPost.creation_time * 1000,
+          ).toISOString();
           if (oldestTs <= lastSeenTimestamp) {
             break;
           }
@@ -117,13 +212,13 @@ export async function fetchProfilePosts(page, profileUrl, lastSeenTimestamp = nu
 }
 
 /**
- * Recursively search a JSON object for post nodes.
- * A post node has at minimum: post_id and creation_time.
+ * Recursively search a JSON object for Story nodes.
+ * A Story node has __typename === "Story" and a post_id.
  */
-function findPostNodes(obj, results = []) {
+function findStoryNodes(obj, results = []) {
   if (!obj || typeof obj !== "object") return results;
 
-  if (obj.post_id && obj.creation_time) {
+  if (obj.__typename === "Story" && obj.post_id) {
     results.push(obj);
     return results;
   }
@@ -131,10 +226,10 @@ function findPostNodes(obj, results = []) {
   for (const val of Object.values(obj)) {
     if (Array.isArray(val)) {
       for (const item of val) {
-        findPostNodes(item, results);
+        findStoryNodes(item, results);
       }
     } else if (val && typeof val === "object") {
-      findPostNodes(val, results);
+      findStoryNodes(val, results);
     }
   }
 
