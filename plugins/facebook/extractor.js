@@ -177,7 +177,9 @@ export async function fetchProfilePosts(
   page.on("response", handler);
 
   try {
-    await page.goto(profileUrl, { waitUntil: "domcontentloaded" });
+    // Navigate directly to the posts tab to ensure timeline content loads
+    const postsUrl = profileUrl.replace(/\/$/, "") + "/posts/";
+    await page.goto(postsUrl, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(5000);
 
     // Scroll to load more posts
