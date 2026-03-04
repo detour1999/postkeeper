@@ -67,7 +67,6 @@ Override directories with environment variables:
 ```
 archive/
   instagram/
-    state.json
     posts/
       username1/
         2024-03-15-BxK3j2hA1.as2.json
@@ -121,6 +120,34 @@ The built-in Instagram plugin archives posts from public or followed profiles.
 2. `postkeeper run instagram` launches a headless browser, navigates to each profile, and intercepts Instagram's internal GraphQL API responses to extract structured post data.
 3. Pagination is driven by scrolling the profile page. On the first run it scrolls through the full history; subsequent runs stop when reaching the last seen post timestamp.
 4. For each new post, the plugin fetches full details (including all carousel items), downloads media, and returns an AS2 object with raw data for storage.
+
+## Facebook Plugin
+
+Archives your own Facebook posts using a real browser session.
+
+**Configuration:**
+
+```json
+{
+  "plugins": {
+    "facebook": {
+      "profiles": [
+        "https://www.facebook.com/yourusername",
+        "https://www.facebook.com/YourBusinessPage"
+      ]
+    }
+  }
+}
+```
+
+- `profiles` -- list of Facebook profile/page URLs to archive.
+
+**How it works:**
+
+1. `postkeeper init facebook` opens a real Chromium browser window. Log in manually, then close the window. The browser session is persisted to the plugin's data directory.
+2. `postkeeper run facebook` launches a headless browser, navigates to each profile URL, and intercepts Facebook's internal GraphQL API responses to extract structured post data.
+3. On the first run it scrolls through the full history; subsequent runs stop when reaching the last archived post timestamp.
+4. Archives all post types: text, photos, videos, shared links, check-ins, and life events.
 
 ## RSS/Atom Plugin
 
@@ -184,7 +211,7 @@ export default {
   // context provides: context.dataDir, context.log(msg)
   async status(config, context) { /* ... */ },
 
-  // Fetch new posts. Return { posts, state }.
+  // Fetch new posts. Return { posts }.
   // Each post in the array: { as2, raw, media }
   //   as2   -- complete ActivityStreams 2.0 object
   //   raw   -- original platform data (saved as .raw.json)
@@ -197,7 +224,8 @@ export default {
 ```
 
 The `context` object passed to `run` provides:
-- `context.state` -- previous plugin state (for tracking last-seen timestamps).
+- `context.archivedIds` -- Set of AS2 IDs already in the archive.
+- `context.latestByAuthor` -- `{ authorName: latestPublishedTimestamp }` derived from the archive.
 - `context.tmpDir` -- temporary directory for downloading media before it is moved to the archive.
 - `context.dataDir` -- plugin-specific persistent data directory.
 - `context.log(msg)` -- log a message under the plugin's name.
