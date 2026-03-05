@@ -1,8 +1,8 @@
-// ABOUTME: Tests for Facebook extractor — flattenStory and parsePost.
+// ABOUTME: Tests for Facebook extractor — flattenStory, parsePost, and isOwnPost.
 // ABOUTME: Covers text, photo, video, shared link, check-in, and edge cases.
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { flattenStory, parsePost } from "../../../plugins/facebook/extractor.js";
+import { flattenStory, parsePost, isOwnPost } from "../../../plugins/facebook/extractor.js";
 
 function makeStory(overrides = {}) {
   return {
@@ -253,5 +253,45 @@ describe("Facebook parsePost", () => {
     assert.strictEqual(post.timestamp, null);
     assert.strictEqual(post.reactions, 0);
     assert.strictEqual(post.comments, 0);
+  });
+});
+
+describe("Facebook isOwnPost", () => {
+  test("returns true when actor URL matches profile URL", () => {
+    const story = {
+      actors: [{ name: "Dylan Richard", url: "https://www.facebook.com/dylanr" }],
+    };
+    assert.strictEqual(isOwnPost(story, "https://www.facebook.com/dylanr"), true);
+  });
+
+  test("returns false when actor URL does not match profile URL", () => {
+    const story = {
+      actors: [{ name: "Kieran Delaney", url: "https://www.facebook.com/kieranjdelaney" }],
+    };
+    assert.strictEqual(isOwnPost(story, "https://www.facebook.com/dylanr"), false);
+  });
+
+  test("handles trailing slashes in URLs", () => {
+    const story = {
+      actors: [{ name: "Dylan Richard", url: "https://www.facebook.com/dylanr/" }],
+    };
+    assert.strictEqual(isOwnPost(story, "https://www.facebook.com/dylanr"), true);
+  });
+
+  test("is case-insensitive", () => {
+    const story = {
+      actors: [{ name: "Dylan Richard", url: "https://www.facebook.com/DylanR" }],
+    };
+    assert.strictEqual(isOwnPost(story, "https://www.facebook.com/dylanr"), true);
+  });
+
+  test("returns true when actors array is empty", () => {
+    const story = { actors: [] };
+    assert.strictEqual(isOwnPost(story, "https://www.facebook.com/dylanr"), true);
+  });
+
+  test("returns true when actors field is missing", () => {
+    const story = {};
+    assert.strictEqual(isOwnPost(story, "https://www.facebook.com/dylanr"), true);
   });
 });

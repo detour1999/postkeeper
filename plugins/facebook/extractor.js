@@ -2,6 +2,20 @@
 // ABOUTME: Handles profile scrolling, Story node flattening, and raw node parsing.
 
 /**
+ * Check if a story was authored by the profile owner (not a wall post from someone else).
+ * Compares actor URLs against the profile URL being scraped.
+ */
+export function isOwnPost(story, profileUrl) {
+  const actors = story.actors || [];
+  if (actors.length === 0) return true; // no actor info — assume own
+  const normalizedProfile = profileUrl.replace(/\/+$/, "").toLowerCase();
+  return actors.some((a) => {
+    const actorUrl = (a.url || "").replace(/\/+$/, "").toLowerCase();
+    return actorUrl === normalizedProfile;
+  });
+}
+
+/**
  * Flatten a Facebook Story GraphQL object into a normalized node for parsePost.
  * Facebook nests data deeply in comet_sections — this pulls it all to the top level.
  */
@@ -156,6 +170,8 @@ export async function fetchProfilePosts(
           for (const story of stories) {
             if (story.post_id && !seenIds.has(String(story.post_id))) {
               seenIds.add(String(story.post_id));
+              // Skip wall posts from other people
+              if (!isOwnPost(story, profileUrl)) continue;
               const flat = flattenStory(story);
               // Skip stories without a permalink (aggregated/suggested content)
               if (flat.permalink_url) {
