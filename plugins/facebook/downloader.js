@@ -10,6 +10,10 @@ export async function downloadMedia(mediaItems, tmpDir, postId, log = console.lo
   mkdirSync(downloadDir, { recursive: true });
 
   for (const item of mediaItems) {
+    if (!item.url) {
+      log(`  Skipping ${item.file}: no URL available`);
+      continue;
+    }
     const filePath = join(downloadDir, item.file);
     const response = await fetch(item.url);
     if (!response.ok) {
