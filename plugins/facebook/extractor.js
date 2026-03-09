@@ -120,6 +120,7 @@ export function parsePost(node, profileUrl, profileName) {
 
   return {
     postId: node.post_id,
+    permalinkUrl: node.permalink_url || null,
     profileUrl,
     profileName,
     timestamp,

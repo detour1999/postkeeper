@@ -8,6 +8,7 @@ describe("Facebook toAS2", () => {
   test("converts a text post to AS2", () => {
     const post = {
       postId: "pfbid02abc",
+      permalinkUrl: "https://www.facebook.com/dylanr/posts/pfbid02abc",
       profileUrl: "https://www.facebook.com/dylanr",
       profileName: "dylanr",
       timestamp: "2024-03-15T14:30:00.000Z",
@@ -36,6 +37,7 @@ describe("Facebook toAS2", () => {
   test("converts a photo post with media", () => {
     const post = {
       postId: "pfbid02xyz",
+      permalinkUrl: "https://www.facebook.com/dylanr/posts/pfbid02xyz",
       profileUrl: "https://www.facebook.com/dylanr",
       profileName: "dylanr",
       timestamp: "2024-06-01T12:00:00.000Z",
@@ -60,6 +62,7 @@ describe("Facebook toAS2", () => {
   test("converts a video post", () => {
     const post = {
       postId: "pfbid02vid",
+      permalinkUrl: "https://www.facebook.com/dylanr/posts/pfbid02vid",
       profileUrl: "https://www.facebook.com/dylanr",
       profileName: "dylanr",
       timestamp: "2024-06-01T12:00:00.000Z",
@@ -78,6 +81,7 @@ describe("Facebook toAS2", () => {
   test("includes shared link as attachment", () => {
     const post = {
       postId: "pfbid02link",
+      permalinkUrl: "https://www.facebook.com/dylanr/posts/pfbid02link",
       profileUrl: "https://www.facebook.com/dylanr",
       profileName: "dylanr",
       timestamp: "2024-06-01T12:00:00.000Z",
@@ -98,6 +102,7 @@ describe("Facebook toAS2", () => {
   test("includes location when present", () => {
     const post = {
       postId: "pfbid02loc",
+      permalinkUrl: "https://www.facebook.com/dylanr/posts/pfbid02loc",
       profileUrl: "https://www.facebook.com/dylanr",
       profileName: "dylanr",
       timestamp: "2024-06-01T12:00:00.000Z",
@@ -116,6 +121,7 @@ describe("Facebook toAS2", () => {
   test("omits location when null", () => {
     const post = {
       postId: "pfbid02noloc",
+      permalinkUrl: "https://www.facebook.com/dylanr/posts/pfbid02noloc",
       profileUrl: "https://www.facebook.com/dylanr",
       profileName: "dylanr",
       timestamp: "2024-06-01T12:00:00.000Z",

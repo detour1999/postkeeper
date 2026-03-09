@@ -7,7 +7,7 @@ function mediaTypeToAS2(type) {
 }
 
 export function toAS2(post) {
-  const postUrl = `${post.profileUrl}/posts/${post.postId}`;
+  const postUrl = post.permalinkUrl || `${post.profileUrl}/posts/${post.postId}`;
 
   const attachment = post.media.map((m) => ({
     ...mediaTypeToAS2(m.type),

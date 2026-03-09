@@ -170,6 +170,7 @@ describe("Facebook parsePost", () => {
     };
     const post = parsePost(node, "https://www.facebook.com/dylanr", "dylanr");
     assert.strictEqual(post.postId, "pfbid02abc");
+    assert.strictEqual(post.permalinkUrl, "https://www.facebook.com/dylanr/posts/pfbid02abc");
     assert.strictEqual(post.content, "Hello world");
     assert.strictEqual(post.timestamp, "2024-03-15T13:50:00.000Z");
     assert.strictEqual(post.reactions, 42);
