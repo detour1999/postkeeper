@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+  <title>Dylan's bookshelf: read</title>
+  <link>https://www.goodreads.com/review/list_rss/12345678?shelf=read</link>
+  <item>
+    <title><![CDATA[The Left Hand of Darkness]]></title>
+    <link>https://www.goodreads.com/review/show/1111111111</link>
+    <book_id>18423</book_id>
+    <book_image_url>https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1488213612l/18423._SY75_.jpg</book_image_url>
+    <book_large_image_url>https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1488213612l/18423.jpg</book_large_image_url>
+    <author_name>Ursula K. Le Guin</author_name>
+    <isbn>0441478123</isbn>
+    <user_rating>5</user_rating>
+    <user_read_at><![CDATA[Sat, 15 Mar 2024 00:00:00 +0000]]></user_read_at>
+    <user_review><![CDATA[A masterpiece of science fiction.]]></user_review>
+    <average_rating>4.18</average_rating>
+    <book_published>1969</book_published>
+    <user_shelves>read, sci-fi</user_shelves>
+    <pubDate><![CDATA[Fri, 01 Mar 2024 12:00:00 +0000]]></pubDate>
+  </item>
+  <item>
+    <title><![CDATA[Dune]]></title>
+    <link>https://www.goodreads.com/review/show/2222222222</link>
+    <book_id>234225</book_id>
+    <book_image_url>https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1555447414l/234225._SY75_.jpg</book_image_url>
+    <book_large_image_url>https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1555447414l/234225.jpg</book_large_image_url>
+    <author_name>Frank Herbert</author_name>
+    <isbn>0441172717</isbn>
+    <user_rating>0</user_rating>
+    <user_read_at><![CDATA[]]></user_read_at>
+    <user_review><![CDATA[]]></user_review>
+    <average_rating>4.27</average_rating>
+    <book_published>1965</book_published>
+    <user_shelves>currently-reading</user_shelves>
+    <pubDate><![CDATA[Tue, 10 Mar 2024 08:00:00 +0000]]></pubDate>
+  </item>
+</channel>
+</rss>
