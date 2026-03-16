@@ -45,6 +45,10 @@ export default {
 
   async run(config, context) {
     const userId = config.user_id;
+    if (!userId) {
+      context.log("No user_id configured. Run: postkeeper init goodreads");
+      return { posts: [] };
+    }
     const shelves = config.shelves || DEFAULT_SHELVES;
     let allBooks = [];
 
