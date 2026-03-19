@@ -32,10 +32,21 @@ function parseItem(item) {
     : [];
 
   const pubDateRaw = item.pubDate || "";
-  const started = pubDateRaw ? new Date(pubDateRaw).toISOString() : null;
+  const pubDate = pubDateRaw ? new Date(pubDateRaw).toISOString() : null;
 
   const readAtRaw = item.user_read_at || "";
-  const finished = readAtRaw ? new Date(readAtRaw).toISOString() : null;
+  const readAt = readAtRaw ? new Date(readAtRaw).toISOString() : null;
+
+  // started = earliest of pubDate and user_read_at
+  // finished = latest of the two (if both exist), otherwise whichever we have
+  let started = null;
+  let finished = null;
+  if (pubDate && readAt) {
+    started = pubDate < readAt ? pubDate : readAt;
+    finished = pubDate < readAt ? readAt : pubDate;
+  } else {
+    started = pubDate || readAt;
+  }
 
   return {
     bookId,

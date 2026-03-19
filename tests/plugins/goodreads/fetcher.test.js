@@ -64,6 +64,28 @@ describe("Goodreads parseShelfXml", () => {
     assert.ok(!books[0].coverUrl.includes("_SY75_"));
   });
 
+  test("uses earliest date as started when read_at is before pubDate", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>Test</title>
+  <item>
+    <title><![CDATA[Backdated Book]]></title>
+    <link>https://www.goodreads.com/review/show/9999</link>
+    <book_id>99999</book_id>
+    <author_name>Test Author</author_name>
+    <user_rating>4</user_rating>
+    <user_read_at><![CDATA[Mon, 24 Jul 2023 00:00:00 +0000]]></user_read_at>
+    <user_shelves>read</user_shelves>
+    <pubDate><![CDATA[Wed, 26 Jul 2023 19:06:00 +0000]]></pubDate>
+  </item>
+</channel>
+</rss>`;
+    const books = parseShelfXml(xml);
+    assert.strictEqual(books[0].started, "2023-07-24T00:00:00.000Z");
+    assert.strictEqual(books[0].finished, "2023-07-26T19:06:00.000Z");
+  });
+
   test("returns empty array for empty channel", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Empty</title></channel></rss>`;
