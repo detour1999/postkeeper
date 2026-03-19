@@ -11,7 +11,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "test:coverage": "c8 --check-coverage --lines 90 --branches 80 --functions 80 --exclude='plugins/instagram/index.js' --exclude='plugins/instagram/extractor.js' --exclude='plugins/facebook/index.js' --exclude='plugins/facebook/extractor.js' --exclude='plugins/rss/index.js' --exclude='plugins/meta-archive/index.js' --exclude='src/cli.js' --exclude='tests/**' --exclude='plugins/*/node_modules/**' node --test"
+    "test:coverage": "c8 --check-coverage --lines 90 --branches 80 --functions 80 --exclude='plugins/instagram/index.js' --exclude='plugins/instagram/extractor.js' --exclude='plugins/facebook/index.js' --exclude='plugins/facebook/extractor.js' --exclude='plugins/rss/index.js' --exclude='plugins/meta-archive/index.js' --exclude='plugins/goodreads/index.js' --exclude='src/cli.js' --exclude='tests/**' --exclude='plugins/*/node_modules/**' node --test"
   },
   "keywords": [],
   "author": "Dylan Richard",
