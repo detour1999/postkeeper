@@ -78,7 +78,11 @@ program
         await initPlugin(plugin, pluginName, config, prompt);
       } else {
         for (const plugin of plugins) {
-          const answer = await prompt(`Set up ${plugin.name}? (y/n)`);
+          const existing = config.plugins[plugin.name];
+          const question = existing
+            ? `${plugin.name} is already configured. Reconfigure? (y/n)`
+            : `Set up ${plugin.name}? (y/n)`;
+          const answer = await prompt(question);
           if (answer.trim().toLowerCase() === "y") {
             await initPlugin(plugin, plugin.name, config, prompt);
           }
