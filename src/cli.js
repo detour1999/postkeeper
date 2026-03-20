@@ -64,7 +64,7 @@ program
       console.log(`Config directory already exists: ${configDir}`);
     }
 
-    const config = loadConfig(getConfigPath());
+    let config = loadConfig(getConfigPath());
     const plugins = await discoverPlugins(PLUGINS_DIR);
     const { prompt, close } = createPrompt();
 
@@ -78,6 +78,7 @@ program
         await initPlugin(plugin, pluginName, config, prompt);
       } else {
         for (const plugin of plugins) {
+          config = loadConfig(getConfigPath());
           const existing = config.plugins[plugin.name];
           const question = existing
             ? `${plugin.name} is already configured. Reconfigure? (y/n)`

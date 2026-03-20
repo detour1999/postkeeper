@@ -130,7 +130,7 @@ describe("savePluginConfig", () => {
     });
   });
 
-  test("overwrites existing plugin config", () => {
+  test("overwrites matching keys in existing plugin config", () => {
     initConfigDir();
     const configPath = join(tmpDir, "config.json");
     writeFileSync(
@@ -145,6 +145,24 @@ describe("savePluginConfig", () => {
     const content = JSON.parse(readFileSync(configPath, "utf-8"));
     assert.deepStrictEqual(content, {
       plugins: { instagram: { profiles: ["new-user"] } },
+    });
+  });
+
+  test("merges new keys with existing plugin config", () => {
+    initConfigDir();
+    const configPath = join(tmpDir, "config.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        plugins: { goodreads: { user_id: "123", shelves: ["read", "sci-fi"] } },
+      }, null, 2) + "\n"
+    );
+
+    savePluginConfig("goodreads", { user_id: "456" });
+
+    const content = JSON.parse(readFileSync(configPath, "utf-8"));
+    assert.deepStrictEqual(content, {
+      plugins: { goodreads: { user_id: "456", shelves: ["read", "sci-fi"] } },
     });
   });
 });

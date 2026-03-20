@@ -53,8 +53,9 @@ describe("CLI", () => {
     mkdirSync(tmpConfigDir, { recursive: true });
     // No config.json exists yet
 
-    // Pipe "n" to decline all plugin setup prompts
-    const output = execFileSync("node", [cli, "init"], { encoding: "utf-8", env: execEnv, input: "n\n" });
+    // Pipe "n" for each plugin to decline all setup prompts
+    const declineAll = "n\nn\nn\nn\nn\n";
+    const output = execFileSync("node", [cli, "init"], { encoding: "utf-8", env: execEnv, input: declineAll });
     assert.ok(output.includes("Created config directory"));
     assert.ok(existsSync(join(tmpConfigDir, "config.json")));
 
@@ -64,14 +65,14 @@ describe("CLI", () => {
 
   test("bare init reports existing config dir", () => {
     // Config already exists from beforeEach
-    // Pipe "n" to decline all plugin setup prompts
-    const output = execFileSync("node", [cli, "init"], { encoding: "utf-8", env: execEnv, input: "n\n" });
+    const declineAll = "n\nn\nn\nn\nn\n";
+    const output = execFileSync("node", [cli, "init"], { encoding: "utf-8", env: execEnv, input: declineAll });
     assert.ok(output.includes("already exists"));
   });
 
   test("bare init prompts for each plugin", () => {
-    // Pipe "n" to decline — output should mention the plugin name in the prompt
-    const output = execFileSync("node", [cli, "init"], { encoding: "utf-8", env: execEnv, input: "n\n" });
+    const declineAll = "n\nn\nn\nn\nn\n";
+    const output = execFileSync("node", [cli, "init"], { encoding: "utf-8", env: execEnv, input: declineAll });
     assert.ok(output.includes("Set up"));
   });
 

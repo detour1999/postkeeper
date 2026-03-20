@@ -32,7 +32,7 @@ export function savePluginConfig(pluginName, pluginConfig) {
   const config = JSON.parse(raw);
 
   config.plugins = config.plugins || {};
-  config.plugins[pluginName] = pluginConfig;
+  config.plugins[pluginName] = { ...config.plugins[pluginName], ...pluginConfig };
 
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
 }
