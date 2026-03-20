@@ -2,7 +2,7 @@
 // ABOUTME: Covers text, photo, video, shared link, check-in, and edge cases.
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { flattenStory, parsePost, isOwnPost } from "../../../plugins/facebook/extractor.js";
+import { flattenStory, parsePost, isOwnPost, hasContent } from "../../../plugins/facebook/extractor.js";
 
 function makeStory(overrides = {}) {
   return {
@@ -294,5 +294,54 @@ describe("Facebook isOwnPost", () => {
   test("returns true when actors field is missing", () => {
     const story = {};
     assert.strictEqual(isOwnPost(story, "https://www.facebook.com/dylanr"), true);
+  });
+});
+
+describe("Facebook hasContent", () => {
+  test("returns true for post with message text", () => {
+    const flat = { message_text: "Hello world", media: [], shared_link: null };
+    assert.strictEqual(hasContent(flat), true);
+  });
+
+  test("returns true for post with shared link", () => {
+    const flat = { message_text: "", media: [], shared_link: { url: "https://example.com", title: "Example" } };
+    assert.strictEqual(hasContent(flat), true);
+  });
+
+  test("returns true for post with media that has downloadable URLs", () => {
+    const flat = {
+      message_text: "",
+      media: [{ __typename: "Photo", image: { uri: "https://cdn.fbcdn.net/img.jpg" } }],
+      shared_link: null,
+    };
+    assert.strictEqual(hasContent(flat), true);
+  });
+
+  test("returns false for empty post with no text, no link, no media", () => {
+    const flat = { message_text: "", media: [], shared_link: null };
+    assert.strictEqual(hasContent(flat), false);
+  });
+
+  test("returns false for post with media but no downloadable URLs", () => {
+    const flat = {
+      message_text: "",
+      media: [{ __typename: "GenericAttachmentMedia", id: "123" }],
+      shared_link: null,
+    };
+    assert.strictEqual(hasContent(flat), false);
+  });
+
+  test("returns false for whitespace-only message with no other content", () => {
+    const flat = { message_text: "   ", media: [], shared_link: null };
+    assert.strictEqual(hasContent(flat), false);
+  });
+
+  test("returns true for post with video media", () => {
+    const flat = {
+      message_text: "",
+      media: [{ __typename: "Video", playable_url: "https://cdn.fbcdn.net/vid.mp4" }],
+      shared_link: null,
+    };
+    assert.strictEqual(hasContent(flat), true);
   });
 });
