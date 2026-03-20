@@ -25,3 +25,14 @@ export function initConfigDir() {
 
   return { created, configDir, configPath };
 }
+
+export function savePluginConfig(pluginName, pluginConfig) {
+  const configPath = getConfigPath();
+  const raw = readFileSync(configPath, "utf-8");
+  const config = JSON.parse(raw);
+
+  config.plugins = config.plugins || {};
+  config.plugins[pluginName] = pluginConfig;
+
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+}
