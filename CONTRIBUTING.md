@@ -52,8 +52,19 @@ export default {
     // First-time setup: browser login, OAuth flow, config validation.
     // Called via: postkeeper init my-plugin
     //
-    // context.dataDir - plugin-specific persistent data directory
-    // context.log(msg) - log under plugin name
+    // context.dataDir    - plugin-specific persistent data directory
+    // context.log(msg)   - log under plugin name
+    // context.prompt(question) - async function that prompts the user for
+    //   input via stdin. Returns the user's answer as a string.
+    //   Available during init() only. Use this to interactively collect
+    //   configuration values.
+    // context.saveConfig(newConfig) - function that persists the given
+    //   config object for this plugin to config.json. Available during
+    //   init() only. Overwrites the entire plugin config section.
+    //
+    // Note: context.prompt and context.saveConfig are optional. Plugins
+    // should check `if (context.prompt)` before using them, for backwards
+    // compatibility with older core versions.
   },
 
   async run(config, context) {
