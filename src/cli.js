@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-// src/cli.js
+// ABOUTME: CLI entry point for Postkeeper — parses commands and dispatches to core/plugins.
+// ABOUTME: Supports init, list, status, and run commands for managing social media archiving.
 import { Command } from "commander";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
-import { loadConfig, initConfigDir } from "./config.js";
+import { loadConfig, initConfigDir, savePluginConfig } from "./config.js";
 import { discoverPlugins } from "./core/plugins.js";
 import { runPlugin } from "./core/orchestrator.js";
 import { getConfigPath, getArchiveDir, getPluginDataDir } from "./core/paths.js";
+import { createPrompt } from "./core/prompt.js";
 
 const PROJECT_ROOT = dirname(import.meta.dirname);
 const PLUGINS_DIR = join(PROJECT_ROOT, "plugins");
@@ -33,6 +35,24 @@ program
     }
   });
 
+async function initPlugin(plugin, pluginName, config, promptFn) {
+  const pluginDir = join(PLUGINS_DIR, pluginName);
+  const pluginPkgJson = join(pluginDir, "package.json");
+  if (existsSync(pluginPkgJson)) {
+    console.log(`Installing dependencies for ${pluginName}...`);
+    execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
+  }
+
+  const pluginConfig = config.plugins[pluginName] || {};
+  const context = {
+    dataDir: getPluginDataDir(pluginName),
+    log: (msg) => console.log(`  [${pluginName}] ${msg}`),
+    prompt: promptFn,
+    saveConfig: (newConfig) => savePluginConfig(pluginName, newConfig),
+  };
+  await plugin.init(pluginConfig, context);
+}
+
 program
   .command("init [plugin]")
   .description("Run first-time setup for a plugin")
@@ -44,29 +64,29 @@ program
       console.log(`Config directory already exists: ${configDir}`);
     }
 
-    if (!pluginName) {
-      return;
-    }
-
     const config = loadConfig(getConfigPath());
     const plugins = await discoverPlugins(PLUGINS_DIR);
-    const plugin = plugins.find((p) => p.name === pluginName);
-    if (!plugin) {
-      console.error(`Plugin "${pluginName}" not found. Run "postkeeper list" to see available plugins.`);
-      process.exit(1);
+    const { prompt, close } = createPrompt();
+
+    try {
+      if (pluginName) {
+        const plugin = plugins.find((p) => p.name === pluginName);
+        if (!plugin) {
+          console.error(`Plugin "${pluginName}" not found. Run "postkeeper list" to see available plugins.`);
+          process.exit(1);
+        }
+        await initPlugin(plugin, pluginName, config, prompt);
+      } else {
+        for (const plugin of plugins) {
+          const answer = await prompt(`Set up ${plugin.name}? (y/n)`);
+          if (answer.trim().toLowerCase() === "y") {
+            await initPlugin(plugin, plugin.name, config, prompt);
+          }
+        }
+      }
+    } finally {
+      close();
     }
-    const pluginDir = join(PLUGINS_DIR, pluginName);
-    const pluginPkgJson = join(pluginDir, "package.json");
-    if (existsSync(pluginPkgJson)) {
-      console.log(`Installing dependencies for ${pluginName}...`);
-      execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
-    }
-    const pluginConfig = config.plugins[pluginName] || {};
-    const context = {
-      dataDir: getPluginDataDir(pluginName),
-      log: (msg) => console.log(`  [${pluginName}] ${msg}`),
-    };
-    await plugin.init(pluginConfig, context);
   });
 
 program
