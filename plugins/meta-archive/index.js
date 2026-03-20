@@ -13,20 +13,45 @@ export default {
   name: "meta-archive",
   description: "Import posts from Meta (Facebook/Instagram) data exports",
 
-  async init(config) {
-    const sources = config.sources || [];
+  async init(config, context) {
+    const log = context?.log || console.log;
+    const sources = config.sources ? [...config.sources] : [];
+
+    if (context?.prompt) {
+      while (true) {
+        const path = await context.prompt("Enter path to Meta export (ZIP or directory, or press Enter to finish):");
+        if (!path) break;
+
+        let platform;
+        while (true) {
+          platform = await context.prompt("Platform (instagram/facebook):");
+          if (platform === "instagram" || platform === "facebook") break;
+          log("Please enter 'instagram' or 'facebook'.");
+        }
+
+        const username = await context.prompt("Username (optional, press Enter to skip):");
+        const entry = { path, platform };
+        if (username) entry.username = username;
+        sources.push(entry);
+      }
+
+      if (context.saveConfig && sources.length > 0) {
+        context.saveConfig({ sources });
+      }
+    }
+
     if (sources.length === 0) {
-      console.log("No sources configured. Add sources to config.json under plugins.meta-archive.sources");
+      log("No sources configured. Add sources to config.json under plugins.meta-archive.sources");
       return;
     }
 
     for (const source of sources) {
-      const path = expandPath(source.path);
-      const exists = existsSync(path);
-      console.log(`  ${source.platform}: ${path} - ${exists ? "found" : "NOT FOUND"}`);
+      const resolvedPath = expandPath(source.path);
+      const exists = existsSync(resolvedPath);
+      log(`  ${source.platform}: ${resolvedPath} - ${exists ? "found" : "NOT FOUND"}`);
       if (exists) {
-        const stat = statSync(path);
-        console.log(`    Type: ${stat.isDirectory() ? "folder" : "file"} (${(stat.size / 1024 / 1024).toFixed(1)} MB)`);
+        const stat = statSync(resolvedPath);
+        log(`    Type: ${stat.isDirectory() ? "folder" : "file"} (${(stat.size / 1024 / 1024).toFixed(1)} MB)`);
       }
     }
   },

@@ -14,7 +14,17 @@ export default {
   description: "Goodreads book archiver",
 
   async init(config, context) {
-    const userId = config.user_id;
+    let userId = config.user_id;
+
+    if (!userId && context.prompt) {
+      const input = await context.prompt("Enter your Goodreads user ID (find it in your Goodreads profile URL):");
+      if (!input) {
+        context.log("Skipping Goodreads setup.");
+        return;
+      }
+      userId = input;
+    }
+
     if (!userId) {
       context.log("No user_id configured. Add your Goodreads user ID to config.json under plugins.goodreads.user_id");
       context.log("Find it at: https://www.goodreads.com → My Books → look at the URL for your numeric ID");
@@ -31,6 +41,10 @@ export default {
       } catch (err) {
         context.log(`  ${shelf}: ${err.message}`);
       }
+    }
+
+    if (context.saveConfig) {
+      context.saveConfig({ user_id: userId });
     }
 
     context.log("Setup complete. Run: postkeeper run goodreads");

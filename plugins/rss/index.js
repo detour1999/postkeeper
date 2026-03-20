@@ -29,21 +29,38 @@ export default {
   name: "rss",
   description: "RSS/Atom feed archiver",
 
-  async init(config) {
-    const feeds = config.feeds || [];
+  async init(config, context) {
+    const log = context?.log || console.log;
+    const feeds = config.feeds ? [...config.feeds] : [];
+
+    if (context?.prompt) {
+      while (true) {
+        const url = await context.prompt("Enter feed URL (or press Enter to finish):");
+        if (!url) break;
+        const name = await context.prompt("Feed name (optional, press Enter to skip):");
+        const entry = { url };
+        if (name) entry.name = name;
+        feeds.push(entry);
+      }
+
+      if (context.saveConfig && feeds.length > 0) {
+        context.saveConfig({ feeds });
+      }
+    }
+
     if (feeds.length === 0) {
-      console.log("No feeds configured. Add feeds to config.json under plugins.rss.feeds");
+      log("No feeds configured. Add feeds to config.json under plugins.rss.feeds");
       return;
     }
 
-    console.log(`Configured ${feeds.length} feed(s):`);
+    log(`Configured ${feeds.length} feed(s):`);
     for (const feed of feeds) {
-      console.log(`  ${feed.name || feed.url}`);
+      log(`  ${feed.name || feed.url}`);
       try {
         const response = await fetch(feed.url, { method: "HEAD" });
-        console.log(`    ${response.ok ? "OK" : `HTTP ${response.status}`}`);
+        log(`    ${response.ok ? "OK" : `HTTP ${response.status}`}`);
       } catch (err) {
-        console.log(`    Error: ${err.message}`);
+        log(`    Error: ${err.message}`);
       }
     }
   },

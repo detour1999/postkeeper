@@ -41,7 +41,23 @@ export default {
       browserCtx.on("close", resolve);
     });
 
-    console.log("Session saved. You can now run: postkeeper run facebook");
+    console.log("Session saved.");
+
+    if (context.prompt && context.saveConfig) {
+      const profiles = config.profiles ? [...config.profiles] : [];
+      while (true) {
+        const input = await context.prompt("Enter a Facebook profile URL to track (or press Enter to finish):");
+        if (!input) break;
+        if (!profiles.includes(input)) {
+          profiles.push(input);
+        }
+      }
+      if (profiles.length > 0) {
+        context.saveConfig({ profiles });
+      }
+    } else {
+      console.log("Add profiles to config.json, then run: postkeeper run facebook");
+    }
   },
 
   async status(config, context) {
