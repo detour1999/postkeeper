@@ -16,6 +16,20 @@ export function isOwnPost(story, profileUrl) {
 }
 
 /**
+ * Check if a flattened story has meaningful content worth archiving.
+ * Filters out empty status updates, auto-generated posts (donations, via-shares),
+ * and posts where media references exist but have no downloadable URLs.
+ */
+export function hasContent(flat) {
+  if ((flat.message_text || "").trim()) return true;
+  if (flat.shared_link) return true;
+  const hasRealMedia = (flat.media || []).some((m) => {
+    return m.image?.uri || m.uri || m.playable_url || m.browser_native_sd_url;
+  });
+  return hasRealMedia;
+}
+
+/**
  * Flatten a Facebook Story GraphQL object into a normalized node for parsePost.
  * Facebook nests data deeply in comet_sections — this pulls it all to the top level.
  */
@@ -174,6 +188,8 @@ export async function fetchProfilePosts(
               // Skip wall posts from other people
               if (!isOwnPost(story, profileUrl)) continue;
               const flat = flattenStory(story);
+              // Skip empty posts (status updates, donations, via-shares with no content)
+              if (!hasContent(flat)) continue;
               // Skip stories without a permalink (aggregated/suggested content)
               if (flat.permalink_url) {
                 posts.push(flat);
