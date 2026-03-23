@@ -6,7 +6,7 @@ function starRating(rating) {
   return "\u2605".repeat(rating) + "\u2606".repeat(5 - rating);
 }
 
-export function toAS2(book) {
+export function toAS2(book, userId) {
   const ratingStr = starRating(book.rating);
   const content = ratingStr
     ? `${ratingStr} - ${book.title} by ${book.author}`
@@ -29,7 +29,8 @@ export function toAS2(book) {
     published: book.started,
     attributedTo: {
       type: "Person",
-      name: book.author,
+      name: userId,
+      url: `https://www.goodreads.com/user/show/${userId}`,
     },
     content,
     attachment,
