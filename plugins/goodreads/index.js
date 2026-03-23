@@ -91,7 +91,7 @@ export default {
     const posts = [];
 
     for (const book of newBooks) {
-      const as2 = toAS2(book);
+      const as2 = toAS2(book, userId);
       const mediaFiles = [];
 
       // Download cover image

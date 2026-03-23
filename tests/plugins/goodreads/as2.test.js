@@ -26,7 +26,7 @@ function makeBook(overrides = {}) {
 
 describe("Goodreads toAS2", () => {
   test("converts a rated book to AS2", () => {
-    const as2 = toAS2(makeBook());
+    const as2 = toAS2(makeBook(), "168273107");
     assert.strictEqual(as2["@context"], "https://www.w3.org/ns/activitystreams");
     assert.strictEqual(as2.type, "Note");
     assert.strictEqual(as2.id, "goodreads:book:18423");
@@ -39,12 +39,13 @@ describe("Goodreads toAS2", () => {
       as2.content,
       "★★★★★ - The Left Hand of Darkness by Ursula K. Le Guin",
     );
-    assert.strictEqual(as2.attributedTo.name, "Ursula K. Le Guin");
+    assert.strictEqual(as2.attributedTo.name, "168273107");
+    assert.strictEqual(as2.attributedTo.url, "https://www.goodreads.com/user/show/168273107");
     assert.strictEqual(as2.generator.name, "Goodreads");
   });
 
   test("includes cover image as attachment", () => {
-    const as2 = toAS2(makeBook());
+    const as2 = toAS2(makeBook(), "168273107");
     assert.strictEqual(as2.attachment.length, 1);
     assert.strictEqual(as2.attachment[0].type, "Image");
     assert.strictEqual(as2.attachment[0].mediaType, "image/jpeg");
@@ -52,7 +53,7 @@ describe("Goodreads toAS2", () => {
   });
 
   test("includes book metadata in ext:book", () => {
-    const as2 = toAS2(makeBook());
+    const as2 = toAS2(makeBook(), "168273107");
     const ext = as2["ext:book"];
     assert.strictEqual(ext.title, "The Left Hand of Darkness");
     assert.strictEqual(ext.author, "Ursula K. Le Guin");
@@ -67,12 +68,12 @@ describe("Goodreads toAS2", () => {
   });
 
   test("uses started date as AS2 published", () => {
-    const as2 = toAS2(makeBook());
+    const as2 = toAS2(makeBook(), "168273107");
     assert.strictEqual(as2.published, "2024-03-01T12:00:00.000Z");
   });
 
   test("handles unrated book (rating 0)", () => {
-    const as2 = toAS2(makeBook({ rating: 0 }));
+    const as2 = toAS2(makeBook({ rating: 0 }), "168273107");
     assert.strictEqual(
       as2.content,
       "The Left Hand of Darkness by Ursula K. Le Guin",
@@ -81,17 +82,17 @@ describe("Goodreads toAS2", () => {
   });
 
   test("handles book with no finished date", () => {
-    const as2 = toAS2(makeBook({ finished: null }));
+    const as2 = toAS2(makeBook({ finished: null }), "168273107");
     assert.strictEqual(as2["ext:book"].finished, null);
   });
 
   test("handles book with no cover URL", () => {
-    const as2 = toAS2(makeBook({ coverUrl: "" }));
+    const as2 = toAS2(makeBook({ coverUrl: "" }), "168273107");
     assert.strictEqual(as2.attachment.length, 0);
   });
 
   test("handles null started date", () => {
-    const as2 = toAS2(makeBook({ started: null }));
+    const as2 = toAS2(makeBook({ started: null }), "168273107");
     assert.strictEqual(as2.published, null);
   });
 });
