@@ -22,6 +22,9 @@ export default {
 
     const browserCtx = await chromium.launchPersistentContext(profileDir, {
       headless: false,
+      channel: "chrome",
+      ignoreDefaultArgs: ["--enable-automation"],
+      args: ["--disable-blink-features=AutomationControlled"],
       viewport: { width: 1280, height: 900 },
     });
 
@@ -46,7 +49,7 @@ export default {
 
     let browserCtx;
     try {
-      browserCtx = await chromium.launchPersistentContext(profileDir, { headless: true });
+      browserCtx = await chromium.launchPersistentContext(profileDir, { headless: true, channel: "chrome" });
       const page = await browserCtx.newPage();
       await page.goto("https://photos.google.com/", { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(3000);

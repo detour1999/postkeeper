@@ -32,10 +32,17 @@ describe("Google Photos parseItem", () => {
     assert.strictEqual(item.accountName, "Dylan Richard");
   });
 
-  test("parses dateTaken to ISO string", () => {
+  test("parses dateTaken with year to ISO string", () => {
     const item = parseItem(makeRawItem(), "Dylan Richard");
     assert.ok(item.dateTaken);
     assert.ok(item.dateTaken.includes("2024"));
+  });
+
+  test("parses dateTaken without year by inserting current year", () => {
+    const item = parseItem(makeRawItem({ dateTaken: "Mar 27, 9:49 AM" }), "Dylan Richard");
+    assert.ok(item.dateTaken);
+    const year = new Date().getFullYear().toString();
+    assert.ok(item.dateTaken.includes(year));
   });
 
   test("passes through location", () => {
