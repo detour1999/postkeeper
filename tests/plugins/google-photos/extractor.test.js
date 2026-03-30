@@ -45,6 +45,13 @@ describe("Google Photos parseItem", () => {
     assert.ok(item.dateTaken.includes(year));
   });
 
+  test("parses dateTaken with day-of-week and no year", () => {
+    const item = parseItem(makeRawItem({ dateTaken: "Mar 28, Sat, 9:27 PM" }), "Dylan Richard");
+    assert.ok(item.dateTaken);
+    const year = new Date().getFullYear().toString();
+    assert.ok(item.dateTaken.includes(year));
+  });
+
   test("passes through location", () => {
     const item = parseItem(makeRawItem(), "Dylan Richard");
     assert.strictEqual(item.location.name, "Cannon Beach, Oregon");

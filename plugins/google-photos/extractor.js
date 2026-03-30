@@ -10,10 +10,11 @@ export function parseItem(raw, accountName) {
   if (raw.dateTaken) {
     try {
       let dateStr = raw.dateTaken;
-      // Google Photos omits the year for current-year dates (e.g. "Mar 27, 9:49 AM").
-      // Detect this by checking if the string has no 4-digit year and prepend one.
+      // Google Photos omits the year for current-year dates.
+      // Formats seen: "Mar 27, 9:49 AM" or "Mar 28, Sat, 9:27 PM"
+      // Strip day-of-week if present, then insert year if missing.
+      dateStr = dateStr.replace(/,\s*(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/, ",");
       if (!/\d{4}/.test(dateStr)) {
-        // Insert current year after the day number: "Mar 27, 9:49 AM" -> "Mar 27, 2026, 9:49 AM"
         dateStr = dateStr.replace(/^(\w+ \d+),/, `$1, ${new Date().getFullYear()},`);
       }
       const parsed = new Date(dateStr);
