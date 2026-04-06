@@ -194,6 +194,31 @@ Imports posts from Meta (Facebook/Instagram) data exports.
 
 **How it works:** Reads Meta's JSON and HTML export formats, converts posts to AS2, and copies media into the archive. Handles Meta's UTF-8 encoding bug in JSON exports automatically.
 
+## Google Photos Plugin
+
+Archives photos and videos from your Google Photos library.
+
+**Configuration:**
+
+```json
+{
+  "plugins": {
+    "google-photos": {}
+  }
+}
+```
+
+No configuration needed beyond plugin presence. The account name is detected automatically from the logged-in session.
+
+**How it works:**
+
+1. `postkeeper init google-photos` opens a real Chrome browser window. Log in to your Google account, then close the window. The browser session is persisted to the plugin's data directory.
+2. `postkeeper run google-photos` launches a headless browser, scrolls through your photo library to discover items, visits each item's detail page for full metadata (date, location, camera EXIF, people tags), downloads the original media, and returns AS2 Notes.
+3. Progress is checkpointed to disk. If a run is interrupted, the next run picks up where it left off.
+4. Subsequent runs stop scrolling when they reach already-archived items, so only new photos are processed.
+
+**Note:** Google blocks Playwright's default Chromium from login. This plugin requires Google Chrome to be installed (`npx playwright install chrome` if needed).
+
 ## Writing Plugins
 
 Plugins live in the `plugins/` directory. Each plugin is a directory with an `index.js` that default-exports an object implementing the plugin interface:
@@ -287,6 +312,10 @@ Add:
 ```
 
 This runs daily at 6 AM. Adjust the schedule as needed.
+
+## Roadmap
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for planned plugins (Bluesky, GitHub, Google Photos, Plex, and more).
 
 ## Limitations
 
