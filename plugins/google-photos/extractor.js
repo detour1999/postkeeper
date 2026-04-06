@@ -17,7 +17,12 @@ export function parseItem(raw, accountName) {
       if (!/\d{4}/.test(dateStr)) {
         dateStr = dateStr.replace(/^(\w+ \d+),/, `$1, ${new Date().getFullYear()},`);
       }
-      const parsed = new Date(dateStr);
+      let parsed = new Date(dateStr);
+      // If the result is in the future, the year was likely wrong (e.g. "Dec 31"
+      // parsed as current year when we're now in January of the next year).
+      if (parsed > new Date()) {
+        parsed = new Date(parsed.setFullYear(parsed.getFullYear() - 1));
+      }
       if (!isNaN(parsed.getTime())) {
         dateTaken = parsed.toISOString();
       }

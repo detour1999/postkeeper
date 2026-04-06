@@ -8,6 +8,10 @@ export async function downloadMedia(download, tmpDir, itemId, log = console.log)
   mkdirSync(downloadDir, { recursive: true });
 
   const filename = download.suggestedFilename();
+  if (!filename) {
+    log(`  Skipping download: no suggested filename`);
+    return [];
+  }
   const filePath = join(downloadDir, filename);
 
   await download.saveAs(filePath);
