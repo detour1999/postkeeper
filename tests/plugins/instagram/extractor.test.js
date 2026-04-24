@@ -1,7 +1,7 @@
 // tests/plugins/instagram/extractor.test.js
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parsePost } from "../../../plugins/instagram/extractor.js";
+import { parsePost, hasInstagramSession } from "../../../plugins/instagram/extractor.js";
 
 describe("parsePost", () => {
   test("parses a single image post", () => {
@@ -131,5 +131,34 @@ describe("parsePost", () => {
 
     const post = parsePost(node);
     assert.deepStrictEqual(post.tagged_users, []);
+  });
+});
+
+describe("hasInstagramSession", () => {
+  test("returns true when sessionid cookie has a value", () => {
+    const cookies = [
+      { name: "csrftoken", value: "abc" },
+      { name: "sessionid", value: "65789%3Aabcdef" },
+    ];
+    assert.strictEqual(hasInstagramSession(cookies), true);
+  });
+
+  test("returns false when sessionid cookie is missing", () => {
+    const cookies = [{ name: "csrftoken", value: "abc" }];
+    assert.strictEqual(hasInstagramSession(cookies), false);
+  });
+
+  test("returns false when sessionid value is empty", () => {
+    const cookies = [{ name: "sessionid", value: "" }];
+    assert.strictEqual(hasInstagramSession(cookies), false);
+  });
+
+  test("returns false on empty cookie array", () => {
+    assert.strictEqual(hasInstagramSession([]), false);
+  });
+
+  test("returns false when input is not an array", () => {
+    assert.strictEqual(hasInstagramSession(null), false);
+    assert.strictEqual(hasInstagramSession(undefined), false);
   });
 });

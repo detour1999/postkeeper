@@ -1,6 +1,15 @@
 // plugins/instagram/extractor.js
 
 /**
+ * Returns true if the browser context has a usable Instagram session cookie.
+ * Used by status() to detect logged-out state without relying on DOM heuristics.
+ */
+export function hasInstagramSession(cookies) {
+  if (!Array.isArray(cookies)) return false;
+  return cookies.some((c) => c.name === "sessionid" && typeof c.value === "string" && c.value.length > 0);
+}
+
+/**
  * Extract the best image URL from an image_versions2 object.
  */
 function bestImageUrl(imageVersions) {
@@ -149,60 +158,5 @@ export async function fetchProfilePosts(page, username, lastSeenTimestamp = null
   }
 
   return posts;
-}
-
-/**
- * Fetch full post details (including all carousel items) by navigating to the post permalink.
- * Returns the full post node, or null if not intercepted.
- */
-export async function fetchPostDetails(page, shortcode) {
-  let postNode = null;
-
-  const handler = async (response) => {
-    const url = response.url();
-    if (url.includes("/graphql/query") || url.includes("/api/graphql")) {
-      try {
-        const json = await response.json();
-        const str = JSON.stringify(json);
-        // Look for a response containing this shortcode with carousel_media
-        if (str.includes(shortcode)) {
-          // Check various possible locations for the media data
-          const dataKeys = Object.keys(json?.data || {});
-          for (const key of dataKeys) {
-            const val = json.data[key];
-            // Could be xdt_shortcode_media or similar
-            if (val?.code === shortcode || val?.shortcode === shortcode) {
-              postNode = val;
-              return;
-            }
-            // Could be nested in items/edges
-            const items = val?.items || val?.edges?.map((e) => e.node) || [];
-            for (const item of items) {
-              if (item?.code === shortcode) {
-                postNode = item;
-                return;
-              }
-            }
-          }
-        }
-      } catch {
-        // Not the response we're looking for
-      }
-    }
-  };
-
-  page.on("response", handler);
-
-  try {
-    await page.goto(`https://www.instagram.com/p/${shortcode}/`, {
-      waitUntil: "domcontentloaded",
-    });
-
-    await page.waitForTimeout(5000);
-  } finally {
-    page.removeListener("response", handler);
-  }
-
-  return postNode;
 }
 /* c8 ignore stop */
