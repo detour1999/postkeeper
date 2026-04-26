@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { fetchProfilePosts, fetchPostDetails, parsePost } from "./extractor.js";
+import { fetchProfilePosts, parsePost, hasInstagramSession } from "./extractor.js";
 import { downloadMedia } from "./downloader.js";
 import { toAS2 } from "./as2.js";
 
@@ -61,14 +61,8 @@ export default {
     let browserCtx;
     try {
       browserCtx = await chromium.launchPersistentContext(profileDir, { headless: true });
-      const page = await browserCtx.newPage();
-      await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded" });
-      await page.waitForTimeout(3000);
-
-      const loggedIn = await page.evaluate(() => {
-        return !document.querySelector('input[name="username"]');
-      });
-
+      const cookies = await browserCtx.cookies("https://www.instagram.com/");
+      const loggedIn = hasInstagramSession(cookies);
       await browserCtx.close();
       return loggedIn
         ? { ok: true, message: "Session valid" }
@@ -130,16 +124,13 @@ export default {
                   await new Promise((r) => setTimeout(r, backoff));
                 }
 
-                const fullNode = await fetchPostDetails(page, shortcode);
-                const rawNode = fullNode || node;
-                const postData = parsePost(rawNode);
-
+                const postData = parsePost(node);
                 const mediaFiles = await downloadMedia(postData.media, context.tmpDir, shortcode, context.log);
 
                 const as2 = toAS2(postData);
                 allPosts.push({
                   as2,
-                  raw: rawNode,
+                  raw: node,
                   media: mediaFiles,
                 });
 
