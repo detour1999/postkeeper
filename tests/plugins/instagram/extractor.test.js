@@ -135,21 +135,39 @@ describe("parsePost", () => {
 });
 
 describe("hasInstagramSession", () => {
-  test("returns true when sessionid cookie has a value", () => {
+  const future = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+  const past = Math.floor(Date.now() / 1000) - 60 * 60;
+
+  test("returns true when sessionid cookie has a value and future expiry", () => {
     const cookies = [
-      { name: "csrftoken", value: "abc" },
-      { name: "sessionid", value: "65789%3Aabcdef" },
+      { name: "csrftoken", value: "abc", expires: future },
+      { name: "sessionid", value: "65789%3Aabcdef", expires: future },
     ];
     assert.strictEqual(hasInstagramSession(cookies), true);
   });
 
+  test("returns true when sessionid is a session cookie (expires === -1)", () => {
+    const cookies = [{ name: "sessionid", value: "abc", expires: -1 }];
+    assert.strictEqual(hasInstagramSession(cookies), true);
+  });
+
+  test("returns true when expires field is omitted", () => {
+    const cookies = [{ name: "sessionid", value: "abc" }];
+    assert.strictEqual(hasInstagramSession(cookies), true);
+  });
+
   test("returns false when sessionid cookie is missing", () => {
-    const cookies = [{ name: "csrftoken", value: "abc" }];
+    const cookies = [{ name: "csrftoken", value: "abc", expires: future }];
     assert.strictEqual(hasInstagramSession(cookies), false);
   });
 
   test("returns false when sessionid value is empty", () => {
-    const cookies = [{ name: "sessionid", value: "" }];
+    const cookies = [{ name: "sessionid", value: "", expires: future }];
+    assert.strictEqual(hasInstagramSession(cookies), false);
+  });
+
+  test("returns false when sessionid cookie is past its expiry", () => {
+    const cookies = [{ name: "sessionid", value: "abc", expires: past }];
     assert.strictEqual(hasInstagramSession(cookies), false);
   });
 

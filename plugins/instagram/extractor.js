@@ -1,12 +1,25 @@
-// plugins/instagram/extractor.js
+// ABOUTME: Pure helpers and timeline-scrape orchestration for the Instagram plugin —
+// ABOUTME: parses listing-card nodes into post format and detects logged-in state from cookies.
 
 /**
- * Returns true if the browser context has a usable Instagram session cookie.
- * Used by status() to detect logged-out state without relying on DOM heuristics.
+ * Returns true if the cookies contain a non-empty, unexpired Instagram session cookie.
+ * Used by status() to detect logged-out state without relying on DOM heuristics that
+ * silently false-positive in headless Chromium.
+ *
+ * Note: this only verifies cookie presence and local expiry. Server-side invalidation
+ * (logout elsewhere, password change) is not detectable without an actual network call.
  */
 export function hasInstagramSession(cookies) {
   if (!Array.isArray(cookies)) return false;
-  return cookies.some((c) => c.name === "sessionid" && typeof c.value === "string" && c.value.length > 0);
+  const nowSeconds = Date.now() / 1000;
+  return cookies.some((c) => {
+    if (c.name !== "sessionid") return false;
+    if (typeof c.value !== "string" || c.value.length === 0) return false;
+    // Playwright represents session cookies (no on-disk expiry) as expires === -1.
+    // A missing expires field is treated the same way.
+    if (c.expires === undefined || c.expires === -1) return true;
+    return c.expires > nowSeconds;
+  });
 }
 
 /**

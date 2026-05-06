@@ -1,3 +1,5 @@
+// ABOUTME: Instagram plugin lifecycle — implements init/status/run/shutdown for postkeeper.
+// ABOUTME: Drives a Playwright headless browser to scrape profile timelines via GraphQL intercepts.
 import { chromium } from "playwright";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
@@ -115,7 +117,9 @@ export default {
             const shortcode = node.code;
             context.log(`Processing post ${shortcode}...`);
 
-            let success = false;
+            const postData = parsePost(node);
+            let mediaFiles = null;
+
             for (let attempt = 0; attempt < 3; attempt++) {
               try {
                 if (attempt > 0) {
@@ -123,32 +127,23 @@ export default {
                   context.log(`Retry ${attempt}/2 after ${Math.round(backoff / 1000)}s...`);
                   await new Promise((r) => setTimeout(r, backoff));
                 }
-
-                const postData = parsePost(node);
-                const mediaFiles = await downloadMedia(postData.media, context.tmpDir, shortcode, context.log);
-
-                const as2 = toAS2(postData);
-                allPosts.push({
-                  as2,
-                  raw: node,
-                  media: mediaFiles,
-                });
-
-                success = true;
-                consecutiveErrors = 0;
+                mediaFiles = await downloadMedia(postData.media, context.tmpDir, shortcode, context.log);
                 break;
               } catch (err) {
                 context.log(`Attempt ${attempt + 1}/3 failed for ${shortcode}: ${err.message}`);
               }
             }
 
-            if (!success) {
+            if (mediaFiles === null) {
               consecutiveErrors++;
               context.log(`Skipping post ${shortcode} after 3 attempts`);
               if (consecutiveErrors >= 3) {
                 context.log("3 consecutive failures — pausing this profile");
                 break;
               }
+            } else {
+              allPosts.push({ as2: toAS2(postData), raw: node, media: mediaFiles });
+              consecutiveErrors = 0;
             }
 
             // Delay scales up with number of posts processed to avoid rate limits
