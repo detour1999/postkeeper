@@ -23,7 +23,7 @@ export async function discoverPlugins(pluginsDir) {
         continue;
       }
 
-      plugins.push(plugin);
+      plugins.push({ state: "loaded", ...plugin });
     } catch (err) {
       console.warn(`Skipping plugin "${entry.name}": ${err.message}`);
     }

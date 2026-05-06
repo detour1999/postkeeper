@@ -31,6 +31,25 @@ describe("discoverPlugins", () => {
     assert.strictEqual(typeof plugins[0].init, "function");
   });
 
+  test("tags loaded plugins with state: 'loaded'", async () => {
+    const pluginDir = join(pluginsDir, "stateful-plugin");
+    mkdirSync(pluginDir);
+    writeFileSync(
+      join(pluginDir, "index.js"),
+      `export default {
+        name: "stateful-plugin",
+        async init() {},
+        async run() { return { posts: [] }; },
+      };`
+    );
+
+    const plugins = await discoverPlugins(pluginsDir);
+    assert.strictEqual(plugins.length, 1);
+    assert.strictEqual(plugins[0].state, "loaded");
+    assert.strictEqual(plugins[0].name, "stateful-plugin");
+    assert.strictEqual(typeof plugins[0].run, "function");
+  });
+
   test("skips directories without index.js", async () => {
     mkdirSync(join(pluginsDir, "empty-dir"));
     const plugins = await discoverPlugins(pluginsDir);
