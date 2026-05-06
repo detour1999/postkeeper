@@ -3,7 +3,7 @@
 // ABOUTME: Supports init, list, status, and run commands for managing social media archiving.
 import { Command } from "commander";
 import { existsSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { loadConfig, initConfigDir, savePluginConfig } from "./config.js";
 import { discoverPlugins } from "./core/plugins.js";
@@ -31,7 +31,11 @@ program
       return;
     }
     for (const p of plugins) {
-      console.log(`  ${p.name} - ${p.description || "(no description)"}`);
+      if (p.state === "uninstalled") {
+        console.log(`  ${p.name} - (not installed — run: postkeeper init ${p.name})`);
+      } else {
+        console.log(`  ${p.name} - ${p.description || "(no description)"}`);
+      }
     }
   });
 
@@ -41,6 +45,23 @@ async function initPlugin(plugin, pluginName, config, promptFn) {
   if (existsSync(pluginPkgJson)) {
     console.log(`Installing dependencies for ${pluginName}...`);
     execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
+  }
+
+  // If we started with a stub, deps are on disk now but Node's ESM cache may
+  // hold the prior import failure (especially for transitive imports that
+  // forceReload doesn't reach). Re-exec the CLI in a fresh process so the
+  // child sees a clean module cache. The env guard prevents an infinite loop
+  // if the install genuinely doesn't fix the load.
+  if (plugin.state === "uninstalled") {
+    if (process.env.POSTKEEPER_REEXEC_AFTER_INSTALL) {
+      console.error(`Plugin "${pluginName}" failed to load after install.`);
+      process.exit(1);
+    }
+    const result = spawnSync(process.execPath, process.argv.slice(1), {
+      stdio: "inherit",
+      env: { ...process.env, POSTKEEPER_REEXEC_AFTER_INSTALL: "1" },
+    });
+    process.exit(result.status ?? 1);
   }
 
   const pluginConfig = config.plugins[pluginName] || {};
@@ -107,7 +128,16 @@ program
       process.exit(1);
     }
 
+    if (pluginName && targets.length === 1 && targets[0].state === "uninstalled") {
+      console.log(`  ${pluginName}: not installed — run: postkeeper init ${pluginName}`);
+      process.exit(1);
+    }
+
     for (const plugin of targets) {
+      if (plugin.state === "uninstalled") {
+        console.log(`  ${plugin.name}: not installed — run: postkeeper init ${plugin.name}`);
+        continue;
+      }
       if (typeof plugin.status !== "function") {
         console.log(`  ${plugin.name}: OK (no status check)`);
         continue;
@@ -140,7 +170,16 @@ program
       process.exit(1);
     }
 
+    if (pluginName && targets.length === 1 && targets[0].state === "uninstalled") {
+      console.error(`  ${pluginName}: not installed — run: postkeeper init ${pluginName}`);
+      process.exit(1);
+    }
+
     for (const plugin of targets) {
+      if (plugin.state === "uninstalled") {
+        console.log(`\nSkipping ${plugin.name}: not installed — run: postkeeper init ${plugin.name}`);
+        continue;
+      }
       console.log(`\nRunning ${plugin.name}...`);
 
       // Pre-flight status check

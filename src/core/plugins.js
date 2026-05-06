@@ -1,8 +1,10 @@
+// ABOUTME: Plugin discovery — scans plugins/ for index.js modules and returns
+// ABOUTME: state-tagged entries (loaded / uninstalled) sorted by name.
 import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export async function discoverPlugins(pluginsDir) {
+export async function discoverPlugins(pluginsDir, { forceReload = false } = {}) {
   if (!existsSync(pluginsDir)) return [];
 
   const entries = readdirSync(pluginsDir, { withFileTypes: true });
@@ -15,7 +17,11 @@ export async function discoverPlugins(pluginsDir) {
     if (!existsSync(indexPath)) continue;
 
     try {
-      const mod = await import(pathToFileURL(indexPath).href);
+      // Append a unique query string when forceReload is set so Node's import
+      // cache returns a fresh module — needed when deps were just installed
+      // and a previous import attempt failed/cached an old version.
+      const url = pathToFileURL(indexPath).href + (forceReload ? `?t=${Date.now()}` : "");
+      const mod = await import(url);
       const plugin = mod.default;
 
       if (!plugin?.name || typeof plugin.run !== "function" || typeof plugin.init !== "function") {
@@ -23,11 +29,21 @@ export async function discoverPlugins(pluginsDir) {
         continue;
       }
 
-      plugins.push(plugin);
+      plugins.push({ state: "loaded", ...plugin });
     } catch (err) {
-      console.warn(`Skipping plugin "${entry.name}": ${err.message}`);
+      // Heuristic: package.json + no node_modules == deps not installed.
+      // Won't catch a deps-free plugin with an unrelated import failure;
+      // such a plugin will be silently treated as uninstalled.
+      const pkgJsonPath = join(pluginsDir, entry.name, "package.json");
+      const nodeModulesPath = join(pluginsDir, entry.name, "node_modules");
+      if (existsSync(pkgJsonPath) && !existsSync(nodeModulesPath)) {
+        plugins.push({ state: "uninstalled", name: entry.name });
+      } else {
+        console.warn(`Skipping plugin "${entry.name}": ${err.message}`);
+      }
     }
   }
 
+  plugins.sort((a, b) => a.name.localeCompare(b.name));
   return plugins;
 }
