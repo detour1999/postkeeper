@@ -47,6 +47,17 @@ async function initPlugin(plugin, pluginName, config, promptFn) {
     execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
   }
 
+  // If we started with a stub (deps not installed at discovery time), reload
+  // now that deps are on disk so we have a real plugin module to call init on.
+  if (plugin.state === "uninstalled") {
+    const reloaded = (await discoverPlugins(PLUGINS_DIR)).find((p) => p.name === pluginName);
+    if (!reloaded || reloaded.state !== "loaded") {
+      console.error(`Plugin "${pluginName}" failed to load after install.`);
+      process.exit(1);
+    }
+    plugin = reloaded;
+  }
+
   const pluginConfig = config.plugins[pluginName] || {};
   const context = {
     dataDir: getPluginDataDir(pluginName),
