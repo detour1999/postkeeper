@@ -4,7 +4,7 @@ import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export async function discoverPlugins(pluginsDir) {
+export async function discoverPlugins(pluginsDir, { forceReload = false } = {}) {
   if (!existsSync(pluginsDir)) return [];
 
   const entries = readdirSync(pluginsDir, { withFileTypes: true });
@@ -17,7 +17,11 @@ export async function discoverPlugins(pluginsDir) {
     if (!existsSync(indexPath)) continue;
 
     try {
-      const mod = await import(pathToFileURL(indexPath).href);
+      // Append a unique query string when forceReload is set so Node's import
+      // cache returns a fresh module — needed when deps were just installed
+      // and a previous import attempt failed/cached an old version.
+      const url = pathToFileURL(indexPath).href + (forceReload ? `?t=${Date.now()}` : "");
+      const mod = await import(url);
       const plugin = mod.default;
 
       if (!plugin?.name || typeof plugin.run !== "function" || typeof plugin.init !== "function") {

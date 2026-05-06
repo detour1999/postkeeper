@@ -116,6 +116,29 @@ describe("discoverPlugins", () => {
     );
   });
 
+  test("forceReload re-imports plugin index even when previously cached", async () => {
+    const pluginDir = join(pluginsDir, "reloadable");
+    mkdirSync(pluginDir);
+    const indexPath = join(pluginDir, "index.js");
+    writeFileSync(
+      indexPath,
+      `export default { name: "before", async init() {}, async run() { return { posts: [] } } };`
+    );
+
+    const first = await discoverPlugins(pluginsDir);
+    assert.strictEqual(first.length, 1);
+    assert.strictEqual(first[0].name, "before");
+
+    writeFileSync(
+      indexPath,
+      `export default { name: "after", async init() {}, async run() { return { posts: [] } } };`
+    );
+
+    const second = await discoverPlugins(pluginsDir, { forceReload: true });
+    assert.strictEqual(second.length, 1);
+    assert.strictEqual(second[0].name, "after");
+  });
+
   test("warns and omits a plugin that fails for non-missing-deps reasons", async () => {
     const pluginDir = join(pluginsDir, "broken-plugin");
     mkdirSync(pluginDir);
