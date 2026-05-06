@@ -3,7 +3,7 @@
 // ABOUTME: Supports init, list, status, and run commands for managing social media archiving.
 import { Command } from "commander";
 import { existsSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { loadConfig, initConfigDir, savePluginConfig } from "./config.js";
 import { discoverPlugins } from "./core/plugins.js";
@@ -47,15 +47,21 @@ async function initPlugin(plugin, pluginName, config, promptFn) {
     execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
   }
 
-  // If we started with a stub (deps not installed at discovery time), reload
-  // now that deps are on disk so we have a real plugin module to call init on.
+  // If we started with a stub, deps are on disk now but Node's ESM cache may
+  // hold the prior import failure (especially for transitive imports that
+  // forceReload doesn't reach). Re-exec the CLI in a fresh process so the
+  // child sees a clean module cache. The env guard prevents an infinite loop
+  // if the install genuinely doesn't fix the load.
   if (plugin.state === "uninstalled") {
-    const reloaded = (await discoverPlugins(PLUGINS_DIR)).find((p) => p.name === pluginName);
-    if (!reloaded || reloaded.state !== "loaded") {
+    if (process.env.POSTKEEPER_REEXEC_AFTER_INSTALL) {
       console.error(`Plugin "${pluginName}" failed to load after install.`);
       process.exit(1);
     }
-    plugin = reloaded;
+    const result = spawnSync(process.execPath, process.argv.slice(1), {
+      stdio: "inherit",
+      env: { ...process.env, POSTKEEPER_REEXEC_AFTER_INSTALL: "1" },
+    });
+    process.exit(result.status ?? 1);
   }
 
   const pluginConfig = config.plugins[pluginName] || {};
