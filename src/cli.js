@@ -111,7 +111,16 @@ program
       process.exit(1);
     }
 
+    if (pluginName && targets.length === 1 && targets[0].state === "uninstalled") {
+      console.log(`  ${pluginName}: not installed — run: postkeeper init ${pluginName}`);
+      process.exit(1);
+    }
+
     for (const plugin of targets) {
+      if (plugin.state === "uninstalled") {
+        console.log(`  ${plugin.name}: not installed — run: postkeeper init ${plugin.name}`);
+        continue;
+      }
       if (typeof plugin.status !== "function") {
         console.log(`  ${plugin.name}: OK (no status check)`);
         continue;
