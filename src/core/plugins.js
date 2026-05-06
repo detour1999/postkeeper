@@ -25,7 +25,13 @@ export async function discoverPlugins(pluginsDir) {
 
       plugins.push({ state: "loaded", ...plugin });
     } catch (err) {
-      console.warn(`Skipping plugin "${entry.name}": ${err.message}`);
+      const pkgJsonPath = join(pluginsDir, entry.name, "package.json");
+      const nodeModulesPath = join(pluginsDir, entry.name, "node_modules");
+      if (existsSync(pkgJsonPath) && !existsSync(nodeModulesPath)) {
+        plugins.push({ state: "uninstalled", name: entry.name });
+      } else {
+        console.warn(`Skipping plugin "${entry.name}": ${err.message}`);
+      }
     }
   }
 

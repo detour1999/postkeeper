@@ -72,4 +72,52 @@ describe("discoverPlugins", () => {
     const plugins = await discoverPlugins(join(tmpDir, "nonexistent"));
     assert.deepStrictEqual(plugins, []);
   });
+
+  test("returns 'uninstalled' state when package.json exists but node_modules does not", async () => {
+    const pluginDir = join(pluginsDir, "needy-plugin");
+    mkdirSync(pluginDir);
+    writeFileSync(
+      join(pluginDir, "package.json"),
+      JSON.stringify({ name: "needy-plugin", dependencies: { "some-missing-pkg": "^1.0.0" } })
+    );
+    writeFileSync(
+      join(pluginDir, "index.js"),
+      `import "some-missing-pkg";\nexport default { name: "needy-plugin", async init() {}, async run() { return { posts: [] } } };`
+    );
+
+    const warns = [];
+    const origWarn = console.warn;
+    console.warn = (msg) => warns.push(msg);
+    try {
+      const plugins = await discoverPlugins(pluginsDir);
+      assert.strictEqual(plugins.length, 1);
+      assert.strictEqual(plugins[0].state, "uninstalled");
+      assert.strictEqual(plugins[0].name, "needy-plugin");
+      assert.deepStrictEqual(warns, [], "no warning should be emitted for uninstalled plugins");
+    } finally {
+      console.warn = origWarn;
+    }
+  });
+
+  test("warns and omits a plugin that fails for non-missing-deps reasons", async () => {
+    const pluginDir = join(pluginsDir, "broken-plugin");
+    mkdirSync(pluginDir);
+    // No package.json, so detection won't say 'uninstalled'.
+    writeFileSync(
+      join(pluginDir, "index.js"),
+      `this is not valid javascript`
+    );
+
+    const warns = [];
+    const origWarn = console.warn;
+    console.warn = (msg) => warns.push(msg);
+    try {
+      const plugins = await discoverPlugins(pluginsDir);
+      assert.strictEqual(plugins.length, 0);
+      assert.strictEqual(warns.length, 1);
+      assert.match(warns[0], /broken-plugin/);
+    } finally {
+      console.warn = origWarn;
+    }
+  });
 });
