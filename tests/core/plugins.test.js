@@ -99,6 +99,23 @@ describe("discoverPlugins", () => {
     }
   });
 
+  test("returns plugins sorted by name", async () => {
+    for (const name of ["zeta", "alpha", "mu"]) {
+      const dir = join(pluginsDir, name);
+      mkdirSync(dir);
+      writeFileSync(
+        join(dir, "index.js"),
+        `export default { name: "${name}", async init() {}, async run() { return { posts: [] } } };`
+      );
+    }
+
+    const plugins = await discoverPlugins(pluginsDir);
+    assert.deepStrictEqual(
+      plugins.map((p) => p.name),
+      ["alpha", "mu", "zeta"]
+    );
+  });
+
   test("warns and omits a plugin that fails for non-missing-deps reasons", async () => {
     const pluginDir = join(pluginsDir, "broken-plugin");
     mkdirSync(pluginDir);

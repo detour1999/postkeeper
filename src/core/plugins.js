@@ -35,5 +35,6 @@ export async function discoverPlugins(pluginsDir) {
     }
   }
 
+  plugins.sort((a, b) => a.name.localeCompare(b.name));
   return plugins;
 }
