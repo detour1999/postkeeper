@@ -31,7 +31,11 @@ program
       return;
     }
     for (const p of plugins) {
-      console.log(`  ${p.name} - ${p.description || "(no description)"}`);
+      if (p.state === "uninstalled") {
+        console.log(`  ${p.name} - (not installed — run: postkeeper init ${p.name})`);
+      } else {
+        console.log(`  ${p.name} - ${p.description || "(no description)"}`);
+      }
     }
   });
 
