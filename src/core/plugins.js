@@ -1,3 +1,5 @@
+// ABOUTME: Plugin discovery — scans plugins/ for index.js modules and returns
+// ABOUTME: state-tagged entries (loaded / uninstalled) sorted by name.
 import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -25,6 +27,9 @@ export async function discoverPlugins(pluginsDir) {
 
       plugins.push({ state: "loaded", ...plugin });
     } catch (err) {
+      // Heuristic: package.json + no node_modules == deps not installed.
+      // Won't catch a deps-free plugin with an unrelated import failure;
+      // such a plugin will be silently treated as uninstalled.
       const pkgJsonPath = join(pluginsDir, entry.name, "package.json");
       const nodeModulesPath = join(pluginsDir, entry.name, "node_modules");
       if (existsSync(pkgJsonPath) && !existsSync(nodeModulesPath)) {
