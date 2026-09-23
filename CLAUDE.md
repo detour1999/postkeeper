@@ -2,7 +2,7 @@
 
 ## Project
 
-Postkeeper is a local-first personal social media archiver with a plugin system. Plugins include Instagram, Facebook, Google Photos, Goodreads, RSS/Atom, and Meta data-export import.
+Postkeeper is a local-first personal social media archiver with a plugin system. Each supported platform is a plugin directory under `plugins/`.
 
 ## Quick Reference
 
