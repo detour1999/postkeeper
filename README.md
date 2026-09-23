@@ -330,7 +330,7 @@ This runs daily at 6 AM. Adjust the schedule as needed.
 
 ## Roadmap
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for planned plugins (Bluesky, GitHub, Plex, and more).
+Planned plugins are tracked as [GitHub issues labeled `new plugin`](https://github.com/detour1999/postkeeper/issues?q=is%3Aissue+is%3Aopen+label%3A%22new+plugin%22).
 
 ## Limitations
 
