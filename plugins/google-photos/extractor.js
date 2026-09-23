@@ -68,7 +68,7 @@ export async function scrapeAccountName(page) {
     "aria-label",
   );
   if (label) {
-    // "Google Account: Dylan Richard  \n(detour1999@gmail.com)" -> "Dylan Richard"
+    // "Google Account: Jane Doe  \n(jane@example.com)" -> "Jane Doe"
     const match = label.match(/Google Account:\s*(.+?)(?:\s*\n|\s*\()/);
     if (match) return match[1].trim();
   }

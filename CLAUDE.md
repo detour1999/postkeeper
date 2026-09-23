@@ -2,7 +2,7 @@
 
 ## Project
 
-Postkeeper is a local-first personal social media archiver with a plugin system. Instagram is the first (and currently only) plugin.
+Postkeeper is a local-first personal social media archiver with a plugin system. Each supported platform is a plugin directory under `plugins/`.
 
 ## Quick Reference
 

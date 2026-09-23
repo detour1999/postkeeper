@@ -8,3 +8,7 @@ coverage/
 *.log
 plugins/*/node_modules/
 config.json
+.env
+.env.*
+*.pem
+*.key

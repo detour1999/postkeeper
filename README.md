@@ -23,13 +23,6 @@ npm link
 
 Plugin dependencies are installed automatically during `postkeeper init`.
 
-## Setup
-
-```bash
-npm install
-npx playwright install chromium
-```
-
 ## Quick Start
 
 ```bash
@@ -170,6 +163,28 @@ Archives posts from RSS and Atom feeds as AS2 Articles.
 - `feeds` -- array of feeds to poll. Each has a `url` and optional `name`.
 
 **How it works:** Fetches each feed, parses entries, converts them to AS2 Articles, and downloads any enclosures (podcasts, images). Tracks last-seen entry IDs to avoid re-archiving.
+
+## Goodreads Plugin
+
+Archives your books, ratings, and reviews from Goodreads using public shelf RSS feeds.
+
+**Configuration:**
+
+```json
+{
+  "plugins": {
+    "goodreads": {
+      "user_id": "12345678",
+      "shelves": ["read", "currently-reading"]
+    }
+  }
+}
+```
+
+- `user_id` -- your numeric Goodreads user ID (the number in `goodreads.com/review/list/<id>`).
+- `shelves` -- optional list of shelves to archive. Defaults to `read` and `currently-reading`.
+
+**How it works:** Fetches the RSS feed for each shelf, converts each book to AS2, and downloads the cover image. No login is needed, but only public shelves are available and Goodreads caps each feed at roughly 200 books. See [plugins/goodreads/README.md](plugins/goodreads/README.md) for details.
 
 ## Meta Archive Plugin
 
@@ -315,7 +330,7 @@ This runs daily at 6 AM. Adjust the schedule as needed.
 
 ## Roadmap
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for planned plugins (Bluesky, GitHub, Google Photos, Plex, and more).
+See [docs/ROADMAP.md](docs/ROADMAP.md) for planned plugins (Bluesky, GitHub, Plex, and more).
 
 ## Limitations
 
@@ -323,8 +338,22 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for planned plugins (Bluesky, GitHub, Goo
 - Music metadata is not available on the Instagram web interface.
 - Platform frontend or API changes could break plugin extractors at any time.
 
+## Responsible Use
+
+Postkeeper is for archiving **your own** content. The browser-based plugins (Instagram, Facebook, Google Photos) automate a logged-in session of your account, which may conflict with a platform's terms of service. You are responsible for how you use this tool and for complying with the terms of each platform you archive from. Do not use it to collect other people's content.
+
+Browser sessions and archived data are stored unencrypted under `~/.local/share/postkeeper/`. Treat that directory like a password store: anyone with access to it can act as your logged-in accounts.
+
 ## Tests
 
 ```bash
 npm test
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, see [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)
