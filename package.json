@@ -13,7 +13,7 @@
     "test": "node --test",
     "test:coverage": "c8 --check-coverage --lines 90 --branches 80 --functions 80 --exclude='plugins/instagram/index.js' --exclude='plugins/facebook/index.js' --exclude='plugins/facebook/extractor.js' --exclude='plugins/rss/index.js' --exclude='plugins/meta-archive/index.js' --exclude='plugins/goodreads/index.js' --exclude='plugins/google-photos/index.js' --exclude='plugins/google-photos/extractor.js' --exclude='plugins/google-photos/downloader.js' --exclude='src/cli.js' --exclude='tests/**' --exclude='plugins/*/node_modules/**' node --test"
   },
-  "keywords": [],
+  "keywords": ["archive", "archiver", "backup", "activitystreams", "local-first", "instagram", "facebook", "google-photos", "goodreads", "rss"],
   "author": "Dylan Richard",
   "files": [
     "src/",
