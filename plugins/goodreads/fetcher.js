@@ -78,10 +78,9 @@ export function buildShelfUrl(userId, shelf) {
   return `https://www.goodreads.com/review/list/${userId}?shelf=${encodeURIComponent(shelf)}&format=rss`;
 }
 
-export async function fetchShelf(userId, shelf, cookie = null) {
+export async function fetchShelf(userId, shelf) {
   const url = buildShelfUrl(userId, shelf);
-  const headers = cookie ? { Cookie: cookie } : {};
-  const response = await fetch(url, { headers });
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
       `Failed to fetch shelf "${shelf}": HTTP ${response.status}`,

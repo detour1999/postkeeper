@@ -4,7 +4,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseShelfXml, buildShelfUrl, fetchShelf } from "../../../plugins/goodreads/fetcher.js";
+import { parseShelfXml, buildShelfUrl } from "../../../plugins/goodreads/fetcher.js";
 
 const fixturesDir = join(import.meta.dirname, "../../fixtures");
 
@@ -105,39 +105,5 @@ describe("Goodreads parseShelfXml", () => {
 <rss version="2.0"><channel><title>Empty</title></channel></rss>`;
     const books = parseShelfXml(xml);
     assert.deepStrictEqual(books, []);
-  });
-});
-
-describe("Goodreads fetchShelf cookie header", () => {
-  test("sends Cookie header when cookie is provided", async () => {
-    let capturedHeaders = null;
-    const minimalXml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Test</title></channel></rss>`;
-
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (url, options = {}) => {
-      capturedHeaders = options.headers || {};
-      return { ok: true, text: async () => minimalXml };
-    };
-
-    await fetchShelf("12345", "read", "session_id=abc123");
-    globalThis.fetch = originalFetch;
-
-    assert.strictEqual(capturedHeaders.Cookie, "session_id=abc123");
-  });
-
-  test("sends no Cookie header when cookie is null", async () => {
-    let capturedHeaders = null;
-    const minimalXml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Test</title></channel></rss>`;
-
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (url, options = {}) => {
-      capturedHeaders = options.headers || {};
-      return { ok: true, text: async () => minimalXml };
-    };
-
-    await fetchShelf("12345", "read", null);
-    globalThis.fetch = originalFetch;
-
-    assert.strictEqual(capturedHeaders.Cookie, undefined);
   });
 });
