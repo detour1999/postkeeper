@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
@@ -192,16 +192,22 @@ describe("CLI", () => {
       );
     });
 
-    // Uninstalled plugins are a configuration state, not a failure: `run` with
-    // no argument should stay quiet about them, as plugin state discovery intends.
-    test("stays zero when running all plugins and some are merely uninstalled", () => {
-      const output = execFileSync("node", [cli, "run"], {
-        encoding: "utf-8",
-        stdio: "pipe",
-        env: execEnv,
-      });
-      assert.ok(/not installed/.test(output));
-      assert.ok(/Done\./.test(output));
+    // Being uninstalled or unconfigured is a configuration state, not a
+    // failure, so a sweep over every plugin still succeeds. The config here is
+    // empty, so every plugin is skipped for one reason or the other — which of
+    // the two depends on whether plugin dependencies are installed on this
+    // machine, so this asserts the exit code rather than the skip reason.
+    test("stays zero when running all plugins and every one is skipped", () => {
+      const result = spawnSync("node", [cli, "run"], { encoding: "utf-8", env: execEnv });
+
+      // An uninstalled plugin logs its skip to stdout and an unconfigured one to
+      // stderr, so match against both rather than caring which reason applies.
+      const combined = result.stdout + result.stderr;
+
+      assert.strictEqual(result.status, 0, `Expected exit 0, got ${result.status}:\n${combined}`);
+      assert.ok(/Skipping/.test(combined), `Expected plugins to be skipped:\n${combined}`);
+      assert.ok(/Done\./.test(result.stdout));
+      assert.ok(!/Failed:/.test(result.stderr), `Expected no failures reported:\n${result.stderr}`);
     });
   });
 
