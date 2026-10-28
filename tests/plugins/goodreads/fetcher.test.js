@@ -4,9 +4,23 @@ import { test, describe } from "node:test";
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseShelfXml } from "../../../plugins/goodreads/fetcher.js";
+import { parseShelfXml, buildShelfUrl } from "../../../plugins/goodreads/fetcher.js";
 
 const fixturesDir = join(import.meta.dirname, "../../fixtures");
+
+describe("Goodreads buildShelfUrl", () => {
+  test("uses review/list path with format=rss", () => {
+    const url = buildShelfUrl("12345", "read");
+    assert.ok(url.includes("/review/list/12345"), `Expected /review/list/12345 in ${url}`);
+    assert.ok(url.includes("format=rss"), `Expected format=rss in ${url}`);
+    assert.ok(url.includes("shelf=read"), `Expected shelf=read in ${url}`);
+  });
+
+  test("encodes shelf name", () => {
+    const url = buildShelfUrl("12345", "currently-reading");
+    assert.ok(url.includes("shelf=currently-reading"), `Expected encoded shelf in ${url}`);
+  });
+});
 
 describe("Goodreads parseShelfXml", () => {
   test("parses shelf RSS into book items", () => {
