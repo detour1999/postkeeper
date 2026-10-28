@@ -1,8 +1,24 @@
 // ABOUTME: Plugin discovery — scans plugins/ for index.js modules and returns
 // ABOUTME: state-tagged entries (loaded / uninstalled) sorted by name.
-import { readdirSync, existsSync } from "node:fs";
+import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+
+/**
+ * Does this plugin drive a browser? Playwright ships no browser of its own, so
+ * plugins that depend on it need a matching browser build installed too.
+ */
+export function dependsOnPlaywright(pluginDir) {
+  const pkgPath = join(pluginDir, "package.json");
+  if (!existsSync(pkgPath)) return false;
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    return Boolean(pkg.dependencies?.playwright || pkg.devDependencies?.playwright);
+  } catch {
+    // A plugin we can't read is one we can't install browsers for either.
+    return false;
+  }
+}
 
 export async function discoverPlugins(pluginsDir, { forceReload = false } = {}) {
   if (!existsSync(pluginsDir)) return [];

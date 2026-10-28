@@ -2,7 +2,7 @@ import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { discoverPlugins } from "../../src/core/plugins.js";
+import { discoverPlugins, dependsOnPlaywright } from "../../src/core/plugins.js";
 
 describe("discoverPlugins", () => {
   const tmpDir = join(import.meta.dirname, ".tmp-plugins-test");
@@ -159,5 +159,63 @@ describe("discoverPlugins", () => {
     } finally {
       console.warn = origWarn;
     }
+  });
+});
+
+describe("dependsOnPlaywright", () => {
+  const tmpDir = join(import.meta.dirname, ".tmp-playwright-test");
+
+  beforeEach(() => mkdirSync(tmpDir, { recursive: true }));
+  afterEach(() => rmSync(tmpDir, { recursive: true, force: true }));
+
+  function pluginWith(pkg) {
+    const dir = join(tmpDir, "plugin");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify(pkg));
+    return dir;
+  }
+
+  test("detects playwright as a dependency", () => {
+    assert.strictEqual(
+      dependsOnPlaywright(pluginWith({ dependencies: { playwright: "^1.58.2" } })),
+      true,
+    );
+  });
+
+  test("detects playwright as a dev dependency", () => {
+    assert.strictEqual(
+      dependsOnPlaywright(pluginWith({ devDependencies: { playwright: "^1.58.2" } })),
+      true,
+    );
+  });
+
+  test("returns false for a plugin with other dependencies", () => {
+    assert.strictEqual(
+      dependsOnPlaywright(pluginWith({ dependencies: { "fast-xml-parser": "^5.2.0" } })),
+      false,
+    );
+  });
+
+  test("returns false for a plugin with no dependencies at all", () => {
+    assert.strictEqual(dependsOnPlaywright(pluginWith({ private: true })), false);
+  });
+
+  test("returns false when there is no package.json", () => {
+    assert.strictEqual(dependsOnPlaywright(join(tmpDir, "absent")), false);
+  });
+
+  test("returns false rather than throwing on malformed package.json", () => {
+    const dir = join(tmpDir, "broken");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), "{ not json");
+    assert.strictEqual(dependsOnPlaywright(dir), false);
+  });
+
+  test("agrees with the real browser-based plugins in this repo", () => {
+    const pluginsDir = join(import.meta.dirname, "../../plugins");
+    assert.strictEqual(dependsOnPlaywright(join(pluginsDir, "instagram")), true);
+    assert.strictEqual(dependsOnPlaywright(join(pluginsDir, "facebook")), true);
+    assert.strictEqual(dependsOnPlaywright(join(pluginsDir, "google-photos")), true);
+    assert.strictEqual(dependsOnPlaywright(join(pluginsDir, "meta-archive")), false);
   });
 });
