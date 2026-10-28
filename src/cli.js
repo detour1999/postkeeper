@@ -6,7 +6,7 @@ import { existsSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { loadConfig, initConfigDir, savePluginConfig } from "./config.js";
-import { discoverPlugins } from "./core/plugins.js";
+import { discoverPlugins, dependsOnPlaywright } from "./core/plugins.js";
 import { runPlugin } from "./core/orchestrator.js";
 import { getConfigPath, getArchiveDir, getPluginDataDir } from "./core/paths.js";
 import { createPrompt } from "./core/prompt.js";
@@ -45,6 +45,19 @@ async function initPlugin(plugin, pluginName, config, promptFn) {
   if (existsSync(pluginPkgJson)) {
     console.log(`Installing dependencies for ${pluginName}...`);
     execFileSync("npm", ["install"], { cwd: pluginDir, stdio: "inherit" });
+
+    // Each Playwright release pins a browser build, so the npm install above can
+    // move a plugin to a Playwright that wants a build this machine doesn't have
+    // — leaving a setup that worked before to fail at launch with Playwright's
+    // own "please run the following command" banner. Installing here keeps init
+    // self-healing. It is a no-op when the build is already present.
+    if (dependsOnPlaywright(pluginDir)) {
+      console.log(`Installing browser for ${pluginName}...`);
+      execFileSync("npx", ["playwright", "install", "chromium"], {
+        cwd: pluginDir,
+        stdio: "inherit",
+      });
+    }
   }
 
   // If we started with a stub, deps are on disk now but Node's ESM cache may
