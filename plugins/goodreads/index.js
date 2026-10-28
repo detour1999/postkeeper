@@ -32,11 +32,12 @@ export default {
     }
 
     const shelves = config.shelves || DEFAULT_SHELVES;
+    const cookie = config.cookie || null;
     context.log(`Checking RSS access for user ${userId}...`);
 
     for (const shelf of shelves) {
       try {
-        const books = await fetchShelf(userId, shelf);
+        const books = await fetchShelf(userId, shelf, cookie);
         context.log(`  ${shelf}: ${books.length} book(s) accessible`);
       } catch (err) {
         context.log(`  ${shelf}: ${err.message}`);
@@ -45,6 +46,14 @@ export default {
 
     if (context.saveConfig) {
       context.saveConfig({ user_id: userId });
+    }
+
+    if (!cookie) {
+      context.log("Note: Goodreads now requires authentication for RSS feeds.");
+      context.log("If the above shelves returned 0 books or errors, add your session cookie:");
+      context.log("  1. Log into goodreads.com in your browser");
+      context.log("  2. Open DevTools → Network → click any goodreads.com request → copy the Cookie header");
+      context.log("  3. Add to config.json: plugins.goodreads.cookie = \"<paste here>\"");
     }
 
     context.log("Setup complete. Run: postkeeper run goodreads");
@@ -64,12 +73,13 @@ export default {
       return { posts: [] };
     }
     const shelves = config.shelves || DEFAULT_SHELVES;
+    const cookie = config.cookie || null;
     let allBooks = [];
 
     for (const shelf of shelves) {
       context.log(`Fetching shelf: ${shelf}...`);
       try {
-        const books = await fetchShelf(userId, shelf);
+        const books = await fetchShelf(userId, shelf, cookie);
         context.log(`  Found ${books.length} book(s)`);
         allBooks = allBooks.concat(books);
       } catch (err) {
