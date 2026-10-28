@@ -4,7 +4,12 @@ import { test, describe } from "node:test";
 import assert from "node:assert";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseShelfXml, buildShelfUrl } from "../../../plugins/goodreads/fetcher.js";
+import {
+  parseShelfXml,
+  buildShelfUrl,
+  fetchShelf,
+  isSignInUrl,
+} from "../../../plugins/goodreads/fetcher.js";
 
 const fixturesDir = join(import.meta.dirname, "../../fixtures");
 
@@ -105,5 +110,103 @@ describe("Goodreads parseShelfXml", () => {
 <rss version="2.0"><channel><title>Empty</title></channel></rss>`;
     const books = parseShelfXml(xml);
     assert.deepStrictEqual(books, []);
+  });
+
+  // A signed-out request is served the sign-in page with HTTP 200, so the only
+  // way to tell it apart from a genuinely empty shelf is the missing feed root.
+  // Returning [] here is what let the plugin report "0 books" for months.
+  test("throws on the sign-in page served to signed-out requests", () => {
+    const html = readFileSync(join(fixturesDir, "goodreads-signin.html"), "utf-8");
+    assert.throws(
+      () => parseShelfXml(html),
+      /not RSS|signed out|sign in/i,
+      "Expected the sign-in page to throw, not parse to an empty list",
+    );
+  });
+
+  test("throws on non-feed content rather than returning no books", () => {
+    assert.throws(() => parseShelfXml("<html><body>Page not found</body></html>"), /not RSS/i);
+  });
+});
+
+describe("Goodreads fetchShelf", () => {
+  // Responses recorded from www.goodreads.com on 2026-10-28.
+  const signInPage = () => ({
+    url: "https://www.goodreads.com/user/sign_in?returnurl=%2Freview%2Flist%2F168273107%3Fshelf%3Dread%26format%3Drss",
+    ok: true,
+    status: 200,
+    body: readFileSync(join(fixturesDir, "goodreads-signin.html"), "utf-8"),
+  });
+
+  test("returns books when the feed comes back", async () => {
+    const books = await fetchShelf("168273107", "read", async (url) => ({
+      url,
+      ok: true,
+      status: 200,
+      body: readFileSync(join(fixturesDir, "goodreads-shelf.xml"), "utf-8"),
+    }));
+    assert.strictEqual(books.length, 2);
+  });
+
+  test("requests the shelf URL built for the user", async () => {
+    let requested = null;
+    await fetchShelf("168273107", "currently-reading", async (url) => {
+      requested = url;
+      return {
+        url,
+        ok: true,
+        status: 200,
+        body: readFileSync(join(fixturesDir, "goodreads-shelf.xml"), "utf-8"),
+      };
+    });
+    assert.strictEqual(requested, buildShelfUrl("168273107", "currently-reading"));
+  });
+
+  // The signed-out response is a 200 after redirects, so neither the status nor
+  // response.ok reveals the problem — only the final URL and the body do.
+  test("throws when redirected to sign-in despite HTTP 200", async () => {
+    await assert.rejects(
+      () => fetchShelf("168273107", "read", async () => signInPage()),
+      /Not signed in to Goodreads.*"read"/s,
+    );
+  });
+
+  test("throws when the body is the sign-in page and the final URL is unavailable", async () => {
+    await assert.rejects(
+      () => fetchShelf("168273107", "read", async () => ({ ...signInPage(), url: undefined })),
+      /signed out/i,
+    );
+  });
+
+  test("names the shelf when an HTTP error comes back", async () => {
+    await assert.rejects(
+      () =>
+        fetchShelf("168273107", "read", async (url) => ({
+          url,
+          ok: false,
+          status: 404,
+          body: "",
+        })),
+      /Failed to fetch shelf "read": HTTP 404/,
+    );
+  });
+});
+
+describe("Goodreads isSignInUrl", () => {
+  test("recognizes the sign-in URL the shelf feed redirects to", () => {
+    assert.strictEqual(
+      isSignInUrl(
+        "https://www.goodreads.com/user/sign_in?returnurl=%2Freview%2Flist%2F168273107%3Fshelf%3Dread%26format%3Drss",
+      ),
+      true,
+    );
+  });
+
+  test("does not flag the shelf feed URL itself", () => {
+    assert.strictEqual(isSignInUrl(buildShelfUrl("168273107", "read")), false);
+  });
+
+  test("tolerates a missing URL", () => {
+    assert.strictEqual(isSignInUrl(null), false);
   });
 });

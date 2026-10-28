@@ -65,10 +65,29 @@ function parseItem(item) {
   };
 }
 
+const SIGN_IN_PATH = "/user/sign_in";
+
+export function isSignInUrl(url) {
+  return typeof url === "string" && url.includes(SIGN_IN_PATH);
+}
+
+function looksLikeSignInPage(body) {
+  return body.includes(SIGN_IN_PATH);
+}
+
 export function parseShelfXml(xml) {
   const parsed = parser.parse(xml);
   const channel = parsed.rss?.channel;
-  if (!channel) return [];
+  // A shelf with no books still has an <rss><channel> root. Missing it means the
+  // response isn't a feed at all — Goodreads serves its sign-in page with HTTP
+  // 200, so this is the only place a signed-out session can be caught.
+  if (!channel) {
+    throw new Error(
+      looksLikeSignInPage(xml)
+        ? "Goodreads served its sign-in page instead of a feed — the session is signed out. Run: postkeeper init goodreads"
+        : `Goodreads response was not RSS (${xml.length} bytes, no <rss><channel> root)`,
+    );
+  }
 
   const items = channel.item || [];
   return items.map(parseItem);
@@ -78,14 +97,30 @@ export function buildShelfUrl(userId, shelf) {
   return `https://www.goodreads.com/review/list/${userId}?shelf=${encodeURIComponent(shelf)}&format=rss`;
 }
 
-export async function fetchShelf(userId, shelf) {
+/**
+ * Fetch and parse one shelf.
+ *
+ * getShelfPage(url) performs the request and resolves to
+ * { url, ok, status, body }, where url is the final URL after redirects.
+ * The plugin supplies a browser-context-backed implementation so the stored
+ * Goodreads session cookies are applied; tests supply recorded responses.
+ */
+export async function fetchShelf(userId, shelf, getShelfPage) {
   const url = buildShelfUrl(userId, shelf);
-  const response = await fetch(url);
-  if (!response.ok) {
+  const page = await getShelfPage(url);
+
+  if (!page.ok) {
+    throw new Error(`Failed to fetch shelf "${shelf}": HTTP ${page.status}`);
+  }
+  if (isSignInUrl(page.url)) {
     throw new Error(
-      `Failed to fetch shelf "${shelf}": HTTP ${response.status}`,
+      `Not signed in to Goodreads — shelf "${shelf}" redirected to the sign-in page. Run: postkeeper init goodreads`,
     );
   }
-  const xml = await response.text();
-  return parseShelfXml(xml);
+
+  try {
+    return parseShelfXml(page.body);
+  } catch (err) {
+    throw new Error(`Shelf "${shelf}": ${err.message}`);
+  }
 }

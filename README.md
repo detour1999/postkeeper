@@ -30,10 +30,48 @@ postkeeper init instagram    # creates ~/.config/postkeeper/, first-time browser
 postkeeper run               # run all configured plugins
 postkeeper run instagram     # run a single plugin
 postkeeper status            # check auth/connectivity
+postkeeper status --json     # same, machine-readable; exits 1 if any plugin is not ok
 postkeeper list              # show installed plugins
 ```
 
 Archive data is stored at `~/.local/share/postkeeper/archive/`.
+
+## Agent-Driven Login
+
+`postkeeper init <plugin>` opens a real browser window for you to log in — the right
+flow for a human at a keyboard. When an agent is operating postkeeper instead, it
+can't drive that window, so sessions can also be handed over directly:
+
+```bash
+# Cookie JSON on stdin, from any source that can read them
+postkeeper session set goodreads < cookies.json
+cat cookies.json | postkeeper session set goodreads --json
+
+# Or from a file
+postkeeper session set goodreads --file cookies.json
+```
+
+The input is a JSON array of cookies, or an object with a `cookies` array. Both
+Playwright's `context.cookies()` and CDP's `Network.getAllCookies` output are
+accepted as-is, as are browser cookie-export formats using `expirationDate`.
+Fields the browser adds and Playwright rejects (`size`, `session`, `storeId`,
+`hostOnly`, `sourceScheme`) are dropped, and `sameSite` spellings are normalized.
+
+This closes the loop for an unattended agent:
+
+```bash
+postkeeper status goodreads --json || {
+  # log in with the agent's own browser, then hand the session over
+  postkeeper session set goodreads < fresh-cookies.json
+}
+postkeeper run goodreads
+```
+
+Session cookies are usually `HttpOnly`, so reading them needs a browser tool with
+CDP-level cookie access — `document.cookie` will not see them.
+
+Only plugins that implement the optional `setSession` hook support this; the
+others report it plainly and exit non-zero.
 
 ## Configuration
 

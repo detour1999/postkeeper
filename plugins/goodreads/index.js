@@ -1,13 +1,38 @@
 // ABOUTME: Goodreads plugin for postkeeper — archives book reading activity via RSS.
-// ABOUTME: Fetches public RSS feeds for configured shelves, no authentication needed.
+// ABOUTME: Goodreads gates shelf feeds behind a login, so requests go through a stored browser session.
+import { chromium } from "playwright";
 import { join } from "node:path";
-import { createWriteStream } from "node:fs";
+import { existsSync, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { fetchShelf } from "./fetcher.js";
 import { deduplicateBooks } from "./extractor.js";
 import { toAS2 } from "./as2.js";
 
 const DEFAULT_SHELVES = ["read", "currently-reading"];
+const GOODREADS_URL = "https://www.goodreads.com/";
+
+let browserContext = null;
+
+function profileDir(context) {
+  return join(context.dataDir, "browser-profile");
+}
+
+/**
+ * Adapt Playwright's APIResponse to the shape fetchShelf expects. Requests made
+ * through a browser context carry that context's cookies, which is what gets
+ * the shelf feed instead of the sign-in page.
+ */
+function shelfFetcher(browserCtx) {
+  return async (url) => {
+    const response = await browserCtx.request.get(url);
+    return {
+      url: response.url(),
+      ok: response.ok(),
+      status: response.status(),
+      body: await response.text(),
+    };
+  };
+}
 
 export default {
   name: "goodreads",
@@ -31,30 +56,84 @@ export default {
       return;
     }
 
-    const shelves = config.shelves || DEFAULT_SHELVES;
-    context.log(`Checking RSS access for user ${userId}...`);
+    context.log("Opening browser for Goodreads login...");
+    context.log(`Browser profile will be saved to: ${profileDir(context)}`);
 
-    for (const shelf of shelves) {
-      try {
-        const books = await fetchShelf(userId, shelf);
-        context.log(`  ${shelf}: ${books.length} book(s) accessible`);
-      } catch (err) {
-        context.log(`  ${shelf}: ${err.message}`);
-      }
-    }
+    const browserCtx = await chromium.launchPersistentContext(profileDir(context), {
+      headless: false,
+      viewport: { width: 1280, height: 900 },
+    });
+
+    const page = browserCtx.pages()[0] || await browserCtx.newPage();
+    await page.goto(GOODREADS_URL);
+
+    context.log("Log in to Goodreads in the browser window.");
+    context.log("When you're done, close the browser window.");
+
+    await new Promise((resolve) => {
+      browserCtx.on("close", resolve);
+    });
+
+    context.log("Session saved.");
 
     if (context.saveConfig) {
       context.saveConfig({ user_id: userId });
     }
 
+    const shelves = config.shelves || DEFAULT_SHELVES;
+    const probeCtx = await chromium.launchPersistentContext(profileDir(context), { headless: true });
+    try {
+      const getShelfPage = shelfFetcher(probeCtx);
+      for (const shelf of shelves) {
+        try {
+          const books = await fetchShelf(userId, shelf, getShelfPage);
+          context.log(`  ${shelf}: ${books.length} book(s) accessible`);
+        } catch (err) {
+          context.log(`  ${shelf}: ${err.message}`);
+        }
+      }
+    } finally {
+      await probeCtx.close();
+    }
+
     context.log("Setup complete. Run: postkeeper run goodreads");
   },
 
-  async status(config) {
+  async status(config, context) {
     if (!config.user_id) {
-      return { ok: false, message: "No user_id configured" };
+      return { ok: false, message: "No user_id configured. Run: postkeeper init goodreads" };
     }
-    return { ok: true, message: `User ID: ${config.user_id}` };
+    if (!existsSync(profileDir(context))) {
+      return { ok: false, message: "No browser profile found. Run: postkeeper init goodreads" };
+    }
+
+    const shelf = (config.shelves || DEFAULT_SHELVES)[0];
+    let browserCtx;
+    try {
+      browserCtx = await chromium.launchPersistentContext(profileDir(context), { headless: true });
+      // Fetching a shelf is the same work run() does, so it answers the only
+      // question that matters: does the stored session still get a feed?
+      const books = await fetchShelf(config.user_id, shelf, shelfFetcher(browserCtx));
+      return { ok: true, message: `Session valid — ${shelf}: ${books.length} book(s)` };
+    } catch (err) {
+      return { ok: false, message: err.message };
+    } finally {
+      if (browserCtx) await browserCtx.close().catch(() => {});
+    }
+  },
+
+  /**
+   * Install a session captured elsewhere — an agent can log in with its own
+   * browser and hand the cookies over instead of driving a window here.
+   */
+  async setSession(cookies, config, context) {
+    const browserCtx = await chromium.launchPersistentContext(profileDir(context), { headless: true });
+    try {
+      await browserCtx.addCookies(cookies);
+      context.log(`Stored ${cookies.length} cookie(s) in ${profileDir(context)}`);
+    } finally {
+      await browserCtx.close();
+    }
   },
 
   async run(config, context) {
@@ -66,55 +145,70 @@ export default {
     const shelves = config.shelves || DEFAULT_SHELVES;
     let allBooks = [];
 
-    for (const shelf of shelves) {
-      context.log(`Fetching shelf: ${shelf}...`);
-      try {
-        const books = await fetchShelf(userId, shelf);
-        context.log(`  Found ${books.length} book(s)`);
-        allBooks = allBooks.concat(books);
-      } catch (err) {
-        context.log(`  Error: ${err.message}`);
-      }
-    }
+    browserContext = await chromium.launchPersistentContext(profileDir(context), { headless: true });
+    const getShelfPage = shelfFetcher(browserContext);
 
-    const books = deduplicateBooks(allBooks);
-    context.log(`${books.length} unique book(s) after deduplication`);
-
-    // Filter out already-archived books
-    const newBooks = books.filter((b) => !context.archivedIds.has(`goodreads:book:${b.bookId}`));
-    if (newBooks.length === 0) {
-      context.log("No new books.");
-      return { posts: [] };
-    }
-
-    context.log(`${newBooks.length} new book(s) to archive`);
-    const posts = [];
-
-    for (const book of newBooks) {
-      const as2 = toAS2(book, userId);
-      const mediaFiles = [];
-
-      // Download cover image
-      if (book.coverUrl) {
+    try {
+      for (const shelf of shelves) {
+        context.log(`Fetching shelf: ${shelf}...`);
         try {
-          const coverPath = join(context.tmpDir, `${book.bookId}-cover.jpg`);
-          const response = await fetch(book.coverUrl);
-          if (response.ok) {
-            const fileStream = createWriteStream(coverPath);
-            await pipeline(response.body, fileStream);
-            mediaFiles.push({ relativePath: "cover.jpg", tmpPath: coverPath });
-            context.log(`  Downloaded cover for "${book.title}"`);
-          } else {
-            context.log(`  Failed to download cover for "${book.title}": HTTP ${response.status}`);
-          }
+          const books = await fetchShelf(userId, shelf, getShelfPage);
+          context.log(`  Found ${books.length} book(s)`);
+          allBooks = allBooks.concat(books);
         } catch (err) {
-          context.log(`  Failed to download cover for "${book.title}": ${err.message}`);
+          context.log(`  Error: ${err.message}`);
         }
       }
 
-      posts.push({ as2, raw: book, media: mediaFiles });
-    }
+      const books = deduplicateBooks(allBooks);
+      context.log(`${books.length} unique book(s) after deduplication`);
 
-    return { posts };
+      // Filter out already-archived books
+      const newBooks = books.filter((b) => !context.archivedIds.has(`goodreads:book:${b.bookId}`));
+      if (newBooks.length === 0) {
+        context.log("No new books.");
+        return { posts: [] };
+      }
+
+      context.log(`${newBooks.length} new book(s) to archive`);
+      const posts = [];
+
+      for (const book of newBooks) {
+        const as2 = toAS2(book, userId);
+        const mediaFiles = [];
+
+        // Download cover image
+        if (book.coverUrl) {
+          try {
+            const coverPath = join(context.tmpDir, `${book.bookId}-cover.jpg`);
+            const response = await fetch(book.coverUrl);
+            if (response.ok) {
+              const fileStream = createWriteStream(coverPath);
+              await pipeline(response.body, fileStream);
+              mediaFiles.push({ relativePath: "cover.jpg", tmpPath: coverPath });
+              context.log(`  Downloaded cover for "${book.title}"`);
+            } else {
+              context.log(`  Failed to download cover for "${book.title}": HTTP ${response.status}`);
+            }
+          } catch (err) {
+            context.log(`  Failed to download cover for "${book.title}": ${err.message}`);
+          }
+        }
+
+        posts.push({ as2, raw: book, media: mediaFiles });
+      }
+
+      return { posts };
+    } finally {
+      await browserContext.close();
+      browserContext = null;
+    }
+  },
+
+  async shutdown() {
+    if (browserContext) {
+      await browserContext.close();
+      browserContext = null;
+    }
   },
 };
