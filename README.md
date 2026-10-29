@@ -67,8 +67,15 @@ postkeeper status goodreads --json || {
 postkeeper run goodreads
 ```
 
-Session cookies are usually `HttpOnly`, so reading them needs a browser tool with
-CDP-level cookie access — `document.cookie` will not see them.
+Two constraints worth knowing before exporting cookies:
+
+- **They must carry an expiry.** Chrome does not write session cookies — those
+  with no expiry — to disk, so they cannot survive being handed over. `session
+  set` reopens the profile to check what actually persisted and fails naming any
+  cookie that was dropped, rather than reporting a success that stored nothing.
+- **They are usually `HttpOnly`.** Reading them needs a browser tool with
+  CDP-level cookie access, such as Playwright's `context.cookies()`;
+  `document.cookie` will not see them.
 
 Only plugins that implement the optional `setSession` hook support this; the
 others report it plainly and exit non-zero.

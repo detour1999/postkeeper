@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { existsSync, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { fetchShelf } from "./fetcher.js";
+import { findMissingCookies } from "./session.js";
 import { deduplicateBooks } from "./extractor.js";
 import { toAS2 } from "./as2.js";
 
@@ -127,13 +128,41 @@ export default {
    * browser and hand the cookies over instead of driving a window here.
    */
   async setSession(cookies, config, context) {
-    const browserCtx = await chromium.launchPersistentContext(profileDir(context), { headless: true });
+    const dir = profileDir(context);
+
+    const writeCtx = await chromium.launchPersistentContext(dir, { headless: true });
     try {
-      await browserCtx.addCookies(cookies);
-      context.log(`Stored ${cookies.length} cookie(s) in ${profileDir(context)}`);
+      await writeCtx.addCookies(cookies);
     } finally {
-      await browserCtx.close();
+      await writeCtx.close();
     }
+
+    // Cookies only reach disk when the context closes, and Chrome never writes
+    // session cookies at all. Reopening is the only way to see what actually
+    // survived — without this, handing over a session cookie reports success
+    // and stores nothing.
+    const readCtx = await chromium.launchPersistentContext(dir, { headless: true });
+    let stored;
+    try {
+      stored = await readCtx.cookies();
+    } finally {
+      await readCtx.close();
+    }
+
+    const missing = findMissingCookies(cookies, stored);
+    if (missing.length > 0) {
+      const names = missing.map((c) => c.name).join(", ");
+      const sessionOnly = missing.every((c) => c.expires <= 0);
+      throw new Error(
+        `${missing.length} of ${cookies.length} cookie(s) did not persist: ${names}.` +
+          (sessionOnly
+            ? " Cookies with no expiry are session cookies, which Chrome does not store on disk."
+              + " Re-export them with an expiry, or log in with: postkeeper init goodreads"
+            : ""),
+      );
+    }
+
+    context.log(`Stored ${cookies.length} cookie(s) in ${dir}`);
   },
 
   async run(config, context) {
