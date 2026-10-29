@@ -30,10 +30,55 @@ postkeeper init instagram    # creates ~/.config/postkeeper/, first-time browser
 postkeeper run               # run all configured plugins
 postkeeper run instagram     # run a single plugin
 postkeeper status            # check auth/connectivity
+postkeeper status --json     # same, machine-readable; exits 1 if any plugin is not ok
 postkeeper list              # show installed plugins
 ```
 
 Archive data is stored at `~/.local/share/postkeeper/archive/`.
+
+## Agent-Driven Login
+
+`postkeeper init <plugin>` opens a real browser window for you to log in — the right
+flow for a human at a keyboard. When an agent is operating postkeeper instead, it
+can't drive that window, so sessions can also be handed over directly:
+
+```bash
+# Cookie JSON on stdin, from any source that can read them
+postkeeper session set goodreads < cookies.json
+cat cookies.json | postkeeper session set goodreads --json
+
+# Or from a file
+postkeeper session set goodreads --file cookies.json
+```
+
+The input is a JSON array of cookies, or an object with a `cookies` array. Both
+Playwright's `context.cookies()` and CDP's `Network.getAllCookies` output are
+accepted as-is, as are browser cookie-export formats using `expirationDate`.
+Fields the browser adds and Playwright rejects (`size`, `session`, `storeId`,
+`hostOnly`, `sourceScheme`) are dropped, and `sameSite` spellings are normalized.
+
+This closes the loop for an unattended agent:
+
+```bash
+postkeeper status goodreads --json || {
+  # log in with the agent's own browser, then hand the session over
+  postkeeper session set goodreads < fresh-cookies.json
+}
+postkeeper run goodreads
+```
+
+Two constraints worth knowing before exporting cookies:
+
+- **They must carry an expiry.** Chrome does not write session cookies — those
+  with no expiry — to disk, so they cannot survive being handed over. `session
+  set` reopens the profile to check what actually persisted and fails naming any
+  cookie that was dropped, rather than reporting a success that stored nothing.
+- **They are usually `HttpOnly`.** Reading them needs a browser tool with
+  CDP-level cookie access, such as Playwright's `context.cookies()`;
+  `document.cookie` will not see them.
+
+Only plugins that implement the optional `setSession` hook support this; the
+others report it plainly and exit non-zero.
 
 ## Configuration
 
@@ -166,7 +211,7 @@ Archives posts from RSS and Atom feeds as AS2 Articles.
 
 ## Goodreads Plugin
 
-Archives your books, ratings, and reviews from Goodreads using public shelf RSS feeds.
+Archives your books, ratings, and reviews from Goodreads shelf RSS feeds.
 
 **Configuration:**
 
@@ -184,7 +229,12 @@ Archives your books, ratings, and reviews from Goodreads using public shelf RSS 
 - `user_id` -- your numeric Goodreads user ID (the number in `goodreads.com/review/list/<id>`).
 - `shelves` -- optional list of shelves to archive. Defaults to `read` and `currently-reading`.
 
-**How it works:** Fetches the RSS feed for each shelf, converts each book to AS2, and downloads the cover image. No login is needed, but only public shelves are available and Goodreads caps each feed at roughly 200 books. See [plugins/goodreads/README.md](plugins/goodreads/README.md) for details.
+**How it works:**
+
+1. `postkeeper init goodreads` opens a real Chromium browser window. Log in to Goodreads, then close the window. The browser session is persisted to the plugin's data directory.
+2. `postkeeper run goodreads` fetches the RSS feed for each shelf through that session, converts each book to AS2, and downloads the cover image.
+
+Goodreads requires a logged-in session for shelf feeds, and serves its sign-in page with HTTP 200 for unauthenticated requests — so the plugin treats a response that isn't a feed as an error rather than an empty shelf. Each feed is capped at roughly 200 books. See [plugins/goodreads/README.md](plugins/goodreads/README.md) for details.
 
 ## Meta Archive Plugin
 

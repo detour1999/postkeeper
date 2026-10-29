@@ -91,6 +91,19 @@ export default {
   async status(config, context) { ... },
   // context provides: context.dataDir, context.log(msg)
 
+  // Install a session captured elsewhere, so an agent that cannot drive the
+  // browser window init() opens can log in with its own browser and hand the
+  // cookies over. Called via: postkeeper session set <plugin>
+  //
+  // cookies - array of { name, value, domain, path, expires, httpOnly,
+  //   secure, sameSite }, already normalized by the core for Playwright's
+  //   addCookies. expires is in seconds, or -1 for a session cookie.
+  // context provides: context.dataDir, context.log(msg)
+  //
+  // Throw to report failure -- the CLI surfaces the message and exits 1.
+  // Omit this hook if the plugin has no browser session to install.
+  async setSession(cookies, config, context) { ... },
+
   // Cleanup (close browser contexts, connections, etc.)
   async shutdown() { ... },
 ```
